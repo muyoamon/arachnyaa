@@ -1,11 +1,18 @@
+#include <lexbor/core/base.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "http.h"
-#include "cache.h"
-#include "socket.h"
-#include "url.h"
+#include <lexbor/html/html.h>
+
+#include "network/http.h"
+#include "network/cache.h"
+#include "network/socket.h"
+#include "network/url.h"
+#include "parser/html.h"
+
+#define useCache 1
+
 
 int main(int argc, char** argv) {
   char *url = "http://httpbin.org/ip"; //dummy default;
@@ -23,7 +30,7 @@ int main(int argc, char** argv) {
   
   cacheInit(100);
 
-  if (cacheLookUp(url, &cachedResource)) {
+  if (cacheLookUp(url, &cachedResource) && useCache) {
     printf("Resouce found in cache!\n");
     printf("Content: %s\n", cachedResource.content);
   } else {
@@ -31,7 +38,6 @@ int main(int argc, char** argv) {
     int requestLength = createHttpRequest("GET", url, NULL, NULL, requestBuffer);
     printf("Request created\n");
     
-    printf("Connecting to host:%s on port:%s\n", urlComponents->host, urlComponents->port);
     int socketFd = connectToServer(urlComponents->host,(urlComponents->port) ? urlComponents->port : "80");
     printf("Socket connected\n");
     
@@ -47,8 +53,24 @@ int main(int argc, char** argv) {
     time_t lastModified = time(NULL);
     cacheAdd(url, body, lastModified);
     
-    printf("Content: %s\n", body);
-    
+    //printf("Content: %s\n", body);
+
+    printf("parsing html....\n");
+
+    lxb_status_t status;
+    lxb_html_document_t *document;
+
+    size_t htmlLength = strlen(body);
+    document = parse((lxb_char_t *)body, htmlLength);
+
+    PRINT("html:");
+    PRINT("%s",(const char*) body);
+
+
+    PRINT("html tree:");
+    serialize(lxb_dom_interface_node(document));
+
+    lxb_html_document_destroy(document);
     closeSocket(socketFd);
   }
     saveCacheToFile();
