@@ -1,17 +1,63 @@
 cmake_minimum_required(VERSION 3.28)
-project(arachnyaa C)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_BUILD_TYPE Debug)
+project(arachnyaa C ASM_NASM)
 
-find_package(CEF REQUIRED)
+enable_language(ASM_NASM)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+
+
+add_compile_options(
+  -Wall -Wextra -Werror
+  -g
+)
 
 add_subdirectory(src/)
-add_subdirectory(lib/)
 
-target_link_libraries(arachnyaac CEF::CEF)
+if(TARGET arachnyaa_kernel)
+    set(KERNEL_BINARY ${CMAKE_BINARY_DIR}/src/arachnyaa_kernel)
+    set(ISO_DIR ${CMAKE_BINARY_DIR}/iso)
+    set(ISO_FILE ${CMAKE_BINARY_DIR}/arachnyaa.iso)
 
-target_include_directories(arachnyaac PUBLIC ${CEF_INCLUDE_DIR})
+    # Prepare ISO structure
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/grub/grub.cfg
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${ISO_DIR}/boot/grub
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/boot/grub.cfg
+            ${ISO_DIR}/boot/grub/grub.cfg
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${KERNEL_BINARY}
+            ${ISO_DIR}/boot/arachnyaa_kernel
+        DEPENDS arachnyaa_kernel ${CMAKE_SOURCE_DIR}/boot/grub.cfg
+        COMMENT "Preparing ISO directory..."
+    )
+
+    # Build ISO using grub-mkrescue
+    add_custom_target(iso
+        COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg
+        COMMENT "Building bootable ISO image..."
+        VERBATIM
+    )
+
+    # Run QEMU
+    add_custom_target(run-qemu
+        COMMAND qemu-system-i386 -cdrom ${ISO_FILE}
+        DEPENDS iso
+        COMMENT "Running QEMU..."
+        VERBATIM
+    )
+
+    # Run QEMU for Debugging
+    add_custom_target(debug-qemu
+      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY} -d guest_errors,int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+        DEPENDS arachnyaa_kernel
+        COMMENT "Running QEMU in debug mode (localhost:1234)..."
+        VERBATIM
+    )
+endif()
+
 
 
 

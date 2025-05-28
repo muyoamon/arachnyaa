@@ -1,13 +1,33 @@
-add_executable(arachnyaac main.c) 
+set(KERNEL_SOURCES "")
+set(KERNEL_LINKER_SCRIPTS "")
 
-file(GLOB sources
-  "${CMAKE_SOURCE_DIR}/src/*[!.txt]/"
+
+# --- Define the Kernel Executable HERE ---
+add_executable(arachnyaa_kernel "")
+target_sources(arachnyaa_kernel PRIVATE ${KERNEL_SOURCES})
+target_include_directories(arachnyaa_kernel PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel/include
 )
-foreach(i IN ITEMS ${sources})
-    IF(IS_DIRECTORY ${i})
-        add_subdirectory(${i})
-        target_include_directories(arachnyaac PRIVATE ${i})
-        message(STATUS ${i})
-    endif()
-endforeach()
 
+set_target_properties(arachnyaa_kernel PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+
+target_compile_options(arachnyaa_kernel PRIVATE
+  -ffreestanding
+  -nostdlib
+  -Wall -Wextra -Werror
+  -g
+)
+
+target_link_options(arachnyaa_kernel PRIVATE
+  -nostdlib
+  -lgcc
+)
+
+add_subdirectory(drivers)
+add_subdirectory(arch)
+add_subdirectory(kernel)
+
+add_dependencies(arachnyaa_kernel arch_asm_objects)
+
+target_link_libraries(arachnyaa_kernel PRIVATE "")
