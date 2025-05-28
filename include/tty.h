@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define TAB_HORIZONTAL_SPACE  4
+#define TAB_VERTICAL_SPACE    3
+
 // Initialize the TTY system (clears screen, sets cursor).
 void tty_initialize(void);
 

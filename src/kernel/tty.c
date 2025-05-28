@@ -84,16 +84,29 @@ void tty_put_entry_at(char c, uint8_t color, size_t x, size_t y) {
 
 // Put a character, handling newlines and scrolling.
 void tty_putc(char c) {
-  if (c == '\n') {
-    tty_column = 0;
-    tty_row++;
-  } else if (c == '\b') {
-    tty_column--;
-  } else {
-    tty_put_entry_at(c, tty_color, tty_column, tty_row);
-    tty_column++;
+  
+  switch (c) {
+    case ('\n'):
+      tty_column = 0;
+      tty_row++;
+      break;
+    case ('\b'):
+      tty_column--;
+      break;
+    case ('\t'):
+      tty_column += (TAB_HORIZONTAL_SPACE - (tty_column % TAB_HORIZONTAL_SPACE));
+      break;
+    case ('\v'):
+      tty_row += (TAB_VERTICAL_SPACE - (tty_row % TAB_VERTICAL_SPACE));
+      break;
+    case ('\r'):
+      tty_column = 0;
+      break;
+    default:
+      tty_put_entry_at(c, tty_color, tty_column, tty_row);
+      tty_column++;
   }
-
+  
   // Wrap to next line if needed
   if (tty_column >= VGA_WIDTH) {
     tty_column = 0;

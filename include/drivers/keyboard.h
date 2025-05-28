@@ -63,8 +63,11 @@
 // Break code bit
 #define SCANCODE_RELEASE_BIT 0x80
 
-// Call this from your IRQ1 C handler
-void keyboard_handle_interrupt(void);
+
+#define KEYBOARD_DATA_PORT 0x60
+
+// handle scancode
+void keyboard_handle_scancode(uint8_t scancode);
 
 // initializing keyboard state
 void keyboard_init(void);

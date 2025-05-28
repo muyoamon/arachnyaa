@@ -1,6 +1,7 @@
 // interrupts.c - C level interrupt handling for Arachnyaa (x86)
 
-#include "keyboard.h"
+#include "io.h"
+#include <drivers/keyboard.h>
 #include "time.h"
 #include "tty.h"
 #include <stdint.h>
@@ -69,7 +70,8 @@ void isr_common_stub_handler(struct registers_t *regs) {
         break;      
       }
       case 33: {
-        keyboard_handle_interrupt();
+        uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+        keyboard_handle_scancode(scancode);
       }
     }
     
