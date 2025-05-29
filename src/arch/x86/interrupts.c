@@ -5,7 +5,6 @@
 #include "time.h"
 #include "tty.h"
 #include <stdint.h>
-#include <hal/pit.h>
 #include "hal.h"
 
 // Forward declare a simple print function (from hal.c or tty.c)

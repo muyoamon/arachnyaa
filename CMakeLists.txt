@@ -13,6 +13,7 @@ add_compile_options(
 )
 
 add_subdirectory(src/)
+add_subdirectory(lib/)
 
 if(TARGET arachnyaa_kernel)
     set(KERNEL_BINARY ${CMAKE_BINARY_DIR}/src/arachnyaa_kernel)
@@ -49,10 +50,24 @@ if(TARGET arachnyaa_kernel)
         VERBATIM
     )
 
+    add_custom_target(run-qemu-kernel
+      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY}
+        DEPENDS arachnyaa_kernel
+        COMMENT "Running QEMU..."
+        VERBATIM
+    )
+
+
     # Run QEMU for Debugging
-    add_custom_target(debug-qemu
+    add_custom_target(debug-qemu-kernel
       COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY} -d guest_errors,int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
         DEPENDS arachnyaa_kernel
+        COMMENT "Running QEMU in debug mode (localhost:1234)..."
+        VERBATIM
+    )
+ add_custom_target(debug-qemu-iso
+   COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d guest_errors,int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+        DEPENDS iso
         COMMENT "Running QEMU in debug mode (localhost:1234)..."
         VERBATIM
     )

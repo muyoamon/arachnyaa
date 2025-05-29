@@ -1,8 +1,15 @@
 ; boot.s - Entry point and Multiboot setup for Arachnyaa (x86/NASM)
 
+; --- Multiboot Flags bits
+MB_FLAG_ALIGN_MODULES equ (1 << 0)
+MB_FLAG_MEMORY_INFO   equ (1 << 1)
+MB_FLAG_MEMORY_MAP    equ (1 << 6)
+
+
 ; --- Multiboot Header Constants ---
 MB_MAGIC        equ 0x1BADB002  ; Multiboot magic number
-MB_FLAGS        equ 0x00000000  ; Align modules, provide memory map, use ELF sections
+MB_FLAGS        equ MB_FLAG_ALIGN_MODULES | MB_FLAG_MEMORY_INFO 
+;MB_FLAGS        equ 0x00000000
 MB_CHECKSUM     equ -(MB_MAGIC + MB_FLAGS)
 
 ; --- GDT Constants (will match GDT in gdt.c) ---
@@ -65,19 +72,21 @@ _start:
     lgdt [gdt_ptr]  ; load GDT
     jmp 0x08:.load_segments ; Far jump to set CS to 0x08
 .load_segments:
+    push ax
     mov ax, 0x10    ; Set DS, SS, ES, FS, GS to 0x10 (data segment)
     mov ds, ax
     mov ss, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
+    pop ax
 
     ; Set up the stack
     mov esp, kernel_stack_top ; Point ESP to the top of our stack
 
     ; --- Prepare for C environment ---
     ; Push Multiboot info and magic onto the C stack
-    mov eax, MB_MAGIC
+    ; mov eax, MB_MAGIC
     push ebx
     push eax
 

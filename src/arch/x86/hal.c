@@ -1,7 +1,6 @@
 // hal.c - Hardware Abstraction Layer for Arachnyaa (x86)
 
 #include <time.h>
-#include <hal/pit.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <io.h>
