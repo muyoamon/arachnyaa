@@ -42,6 +42,7 @@ set(ARCH_C_SOURCES
     idt.c
     interrupts.c
     hal.c
+    paging.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

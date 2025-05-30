@@ -4,6 +4,7 @@ set(KERNEL_CORE_SOURCES
     tty.c
     pmm.c 
     time.c
+    kheap.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

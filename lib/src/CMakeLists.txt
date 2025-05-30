@@ -1,7 +1,6 @@
 set(KERNEL_DRIVER_SOURCES
 
   string.c
-
 )
 
 target_sources(arachnyaa_kernel PRIVATE ${KERNEL_DRIVER_SOURCES})

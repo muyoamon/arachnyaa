@@ -6,7 +6,7 @@
 // --- VGA Constants ---
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
-#define VGA_MEMORY_ADDR 0xB8000
+#define VGA_MEMORY_ADDR 0xC01FF000  // higher-half address
 #define VGA_PORT_CMD 0x3D4
 #define VGA_PORT_DATA 0x3D5
 

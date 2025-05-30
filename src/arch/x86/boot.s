@@ -62,6 +62,9 @@ gdt_ptr:
   dw gdt_end - gdt_start - 1  ; GDT Limit
   dd gdt_start                ; GDT Base
 
+align 32
+global pdpt
+pdpt: dq 0x0000000000000000
 
 section .text.startup exec align=4
 bits 32 ; We are in 32-bit protected mode
@@ -69,37 +72,190 @@ global _start ; Make _start visible to the linker
 extern kmain  ; Our C kernel entry point
 
 _start:
-    lgdt [gdt_ptr]  ; load GDT
-    jmp 0x08:.load_segments ; Far jump to set CS to 0x08
+  ; === physical memory setup ===
+  cli
+  mov esp, kernel_stack_top - 0xC0000000
+
+  push eax
+
+  call setup_temp_paging
+
+  ; === Jump to Higher-Half Virtual Address ===
+  lea eax, [higher_half_entry]
+  jmp eax
+  ; === set up temporary page tables ===
+setup_temp_paging:
+  push ebx
+  
+  mov edi, pdpt
+  sub edi, 0xC0000000
+  add edi, 0x100000
+  mov ecx, 32/4 
+  xor eax, eax
+  rep stosd
+
+  mov edi, pdir0
+  sub edi, 0xC0000000
+  add edi, 0x100000
+  mov ecx, 4096/4 
+  xor eax, eax
+  rep stosd
+
+  mov edi, ptable_low
+  sub edi, 0xC0000000
+  add edi, 0x100000
+  mov ecx, 4096 / 4 
+  xor eax, eax
+  rep stosd
+
+  mov edi, pdir3
+  sub edi, 0xC0000000
+  add edi, 0x100000
+  mov ecx, 4096/4 
+  xor eax, eax
+  rep stosd
+
+  mov edi, ptable_high
+  sub edi, 0xC0000000
+  add edi, 0x100000
+  mov ecx, 4096 / 4 
+  xor eax, eax
+  rep stosd
+
+  lea eax, [pdir0]
+  or eax, 0x01
+  sub eax, 0xC0000000
+  add eax, 0x100000
+  mov [pdpt + 0*8 - 0xC0000000 + 0x100000], eax
+
+  lea eax, [pdir3]
+  or eax, 0x01
+  sub eax, 0xC0000000
+  add eax, 0x100000
+  mov [pdpt + 3*8 - 0xC0000000 + 0x100000], eax
+
+  lea eax, [ptable_low]
+  or eax, 0x01
+  sub eax, 0xC0000000
+  add eax, 0x100000
+  mov [pdir0 + 0*8 - 0xC0000000 + 0x100000], eax
+
+  lea eax, [ptable_high]
+  or eax, 0x01
+  sub eax, 0xC0000000
+  add eax, 0x100000
+  mov [pdir3 + 0*8 - 0xC0000000 + 0x100000], eax
+
+  xor ecx, ecx
+.map_loop:
+  mov eax, ecx
+  shl eax, 12
+  or eax, 0x003
+  mov [ptable_low + ecx * 8 - 0xC0000000 + 0x100000], eax
+  add eax, 0x100000
+  mov [ptable_high + ecx * 8 - 0xC0000000 + 0x100000], eax
+  inc ecx
+  cmp ecx, 512
+  jl .map_loop
+
+  ; --- map VGA video memory to last entry of high table (0xC03FF000)
+  mov eax, 0xb8000
+  or eax, 0x003
+  mov [ptable_high + 511 * 8 - 0xC0000000 + 0x100000], eax
+  
+  ; --- map multiboot
+  pop eax,
+  and eax, 0xFFFFF000
+  or eax, 0x003
+  mov ecx, 510 * 8 
+  mov [ptable_high + ecx - 0xC0000000 + 0x100000], eax
+  
+
+  lea eax, [pdpt]
+  sub eax, 0xC0000000
+  add eax, 0x100000
+  mov cr3, eax
+
+  mov eax, cr4
+  or eax, 1 << 5
+  mov cr4, eax
+
+  mov eax, cr0
+  or eax, 0x80000000
+  mov cr0, eax
+
+  ret
+  
+; === remove identity mapping after jump
+ 
+section .text align=4 exec
+higher_half_entry:
+  ; === Now in Virtual Memory space ===
+  
+  pop eax
+
+  ; === initialize GDT ===
+  lgdt [gdt_ptr]  ; load GDT
+  jmp 0x08:.load_segments ; Far jump to set CS to 0x08
 .load_segments:
-    push ax
-    mov ax, 0x10    ; Set DS, SS, ES, FS, GS to 0x10 (data segment)
-    mov ds, ax
-    mov ss, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    pop ax
+  push ax
+  mov ax, 0x10    ; Set DS, SS, ES, FS, GS to 0x10 (data segment)
+  mov ds, ax
+  mov ss, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  pop ax
+  
+  ; === Set up the stack ===
+  mov esp, kernel_stack_top ; Point ESP to the top of our stack
+  mov ebp, esp
 
-    ; Set up the stack
-    mov esp, kernel_stack_top ; Point ESP to the top of our stack
+  ; --- Prepare for C environment ---
+  ; Push Multiboot info and magic onto the C stack
+  push 0xC01FE000
+  push eax
 
-    ; --- Prepare for C environment ---
-    ; Push Multiboot info and magic onto the C stack
-    ; mov eax, MB_MAGIC
-    push ebx
-    push eax
+  ; === Clean Up Identity Mapping ===
+  ; call clear_identity_map
+  
+  ; Call C kernel main function
+  call kmain
 
-    ; Call C kernel main function
-    call kmain
-
-    ; If kmain returns (it shouldn't!), hang the system.
-    cli ; Disable interrupts
+  ; If kmain returns (it shouldn't!), hang the system.
+  cli ; Disable interrupts
 .hang:
-    hlt ; Halt the CPU
-    jmp .hang
+  hlt ; Halt the CPU
+  jmp .hang
+;
+; global clear_identity_map
+; clear_identity_map:
+;   mov eax, 0 
+;   mov dword [pdir0 + 0*8], eax
+;   mov dword [pdir0 + 0*8 + 4], eax
+;   mov dword [pdir0 + 1*8], eax
+;   mov dword [pdir0 + 1*8 + 4], eax
+;
+;   mov ecx, 0
+; .flush_loop:
+;   invlpg [ecx]
+;   add ecx, 0x1000 
+;   cmp ecx, 0x00400000
+;   jl .flush_loop
+;
+;   ret
+;
 
 section .bss
+align 4096
+pdir0: resq 4096  ; identity
+align 4096
+pdir3: resq 4096  ; higher half
+align 4096
+ptable_low: resq 4096
+align 4096
+ptable_high: resq 4096
+
 align 16
 kernel_stack_bottom:
     resb STACK_SIZE ; Reserve space for the stack

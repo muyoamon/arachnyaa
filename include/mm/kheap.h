@@ -1,7 +1,39 @@
 #ifndef ARACHNYAA_MM_KHEAP_H_
 #define ARACHNYAA_MM_KHEAP_H_
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+#define KHEAP_MAGIC 0xDEADBEEF
+#define HEAP_ALIGN 16
+
+typedef struct kheap_block {
+  uint32_t magic;
+  size_t size;
+  bool free;
+  struct kheap_block *next;
+  struct kheap_block *prev;
+} kheap_block_t;
+
+typedef struct {
+  uint32_t magic;
+  kheap_block_t *header;
+} kheap_footer_t;
+
+typedef struct {
+  kheap_block_t *head;
+  uintptr_t heap_start;
+  uintptr_t heap_end;
+  uintptr_t heap_max;
+  size_t total_blocks;
+  size_t free_blocks;
+  size_t used_blocks;
+} kheap_t;
+
+
+
+
 /**
  *  @brief Initialize the kernel heap
  *  should be called after pmm_init
@@ -9,7 +41,7 @@
  *  @param initial_heap_size Size of the initial heap area in bytes
  * 
  */
-void kheap_init(void* initial_heap_start, size_t initial_heap_size);
+void kheap_init(uintptr_t initial_heap_start, size_t initial_heap_size);
 
 /**
  * @brief Allocates a chunk of memory from the kernel heap.

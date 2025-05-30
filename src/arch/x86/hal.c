@@ -15,7 +15,7 @@ void io_wait() {
 
 // --- VGA Text Mode ---
 
-volatile uint16_t* vga_buffer = (uint16_t*)0xB8000;
+volatile uint16_t* vga_buffer = (uint16_t*)0xc01FF000;
 const int VGA_WIDTH = 80;
 const int VGA_HEIGHT = 25;
 int tty_row = 0;

@@ -12,6 +12,7 @@
 // memory. 128MB / 4KB/page = 32768 pages. 32768 pages / 8 bits/byte = 4096
 // bytes (4KB) for the bitmap.
 #define PMM_MAX_PAGES (128 * 1024 * 1024 / PMM_PAGE_SIZE)
+#define PHYS_TO_VIRT(p) ((uintptr_t)(p) + (0xC0000000 - 0x100000))
 static uint8_t pmm_bitmap[PMM_MAX_PAGES / 8]; // Statically allocated bitmap
 
 static uint32_t total_memory_pages = 0;
@@ -65,6 +66,7 @@ static void pmm_mark_region_used(uintptr_t base, size_t size) {
 
 void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
               uintptr_t kernel_code_end) {
+  kernel_code_end = kernel_code_end - 0xC0000000 + 0x100000;
   tty_writestring("PMM: Initializing Physical Memory Manager...\n");
 
   tty_writestring("PMM: Multiboot info struct at physical address: 0x");

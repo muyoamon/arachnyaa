@@ -23,7 +23,6 @@ extern isr_common_stub_handler ; C handler
     isr_stub_%1:
         cli            ; Disable interrupts
         push %1        ; Push the interrupt number (error code is already there)
-        push %1        ; testing purpose
         jmp isr_stub_common
 %endmacro
 
