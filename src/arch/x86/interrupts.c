@@ -2,6 +2,7 @@
 
 #include "hal.h"
 #include "io.h"
+#include "kernel/syscall.h"
 #include "paging.h"
 #include "time.h"
 #include "tty.h"
@@ -58,9 +59,31 @@ const char *exception_messages[] = {
 #define PIC_SLAVE_CMD 0xA0
 #define PIC_EOI 0x20
 
+
+
+extern uint64_t syscall_dispatcher(uint32_t syscode, uint64_t a0,
+    uint64_t a1, uint64_t a2);
+
+
+
 // C handler called by the common ASM stub
 // Note: The parameters are pushed on the stack in reverse order by the ASM stub
 void isr_common_stub_handler(struct registers_t *regs) {
+
+  // syscall
+  if (regs->int_no == 0x80) {
+    uint32_t syscall_num = regs->eax;
+
+    uint64_t a0 = ((uint64_t)regs->ecx << 32) | regs->ebx;
+    uint64_t a1 = ((uint64_t)regs->esi << 32) | regs->edx;
+    uint64_t a2 = ((uint64_t)regs->ebp << 32) | regs->edi;
+
+    uint64_t res = syscall_dispatcher(syscall_num, a0, a1, a2);
+    // modified eax and edi saved in stack
+    regs->eax = (uint32_t)(res & 0xFFFFFFFF);
+    regs->edi = (uint32_t)(res >> 32);
+    return;
+  }
 
   if (regs->int_no >= 32 && regs->int_no <= 47) {
     switch (regs->int_no) {

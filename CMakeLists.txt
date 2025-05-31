@@ -60,13 +60,13 @@ if(TARGET arachnyaa_kernel)
 
     # Run QEMU for Debugging
     add_custom_target(debug-qemu-kernel
-      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY} -d guest_errors,int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
         DEPENDS arachnyaa_kernel
         COMMENT "Running QEMU in debug mode (localhost:1234)..."
         VERBATIM
     )
  add_custom_target(debug-qemu-iso
-   COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d guest_errors,int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+   COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
         DEPENDS iso
         COMMENT "Running QEMU in debug mode (localhost:1234)..."
         VERBATIM

@@ -1,10 +1,12 @@
+#include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
-#include <mm/kheap.h>
-#include <mm/paging.h>
 #include "mm/multiboot.h"
 #include "mm/pmm.h"
 #include "time.h"
+#include <mm/kheap.h>
+#include <mm/paging.h>
 #include <stdint.h>
+#include <string.h>
 #include <tty.h>
 
 // --- External Functions (Prototypes - should be in proper headers) ---
@@ -22,6 +24,8 @@ void kprint_char(char c) { tty_putc(c); }
 
 extern char _kernel_start;
 extern char _kernel_end;
+
+void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
 
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
@@ -75,9 +79,9 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   // --- Initialize PMM ---
   pmm_init(mb_info, (uintptr_t)&_kernel_start, (uintptr_t)&_kernel_end);
-  
+
   // --- Initialize paging ---
-  paging_init();
+  vmm_init();
 
   // --- Initialize Kernel Heap ---
   // Allocate, for example, 1MB (256 pages) for the initial heap
@@ -93,6 +97,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // allocate pages one by one and add them. For now, let's just try to get one
   // page to start.
   uintptr_t initial_heap_page = (uintptr_t)pmm_alloc_frame();
+  vmm_map(0xC1FFF000, initial_heap_page, 1, PTE_PRESENT | PTE_WRITABLE);
+  initial_heap_page = 0xC1FFF000;
   if (initial_heap_page) {
     tty_writestring("Kernel heap initial page at: 0x");
     tty_write_hex(initial_heap_page);
@@ -138,8 +144,13 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     tty_writestring("Failed to allocate initial page for kernel heap!\n");
   }
   // --- End Kernel Heap Init & Test ---
-  
 
+  // --- Initialize tss ---
+  tty_writestring("Initializing Tss...\t");
+  tss_init();
+  tty_set_color(ok_color);
+  tty_writestring("[OK]\n");
+  tty_set_color(normal_color);
 
   tty_writestring("Testing Interrupts...\t");
   asm volatile("sti");
@@ -182,10 +193,63 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // uint32_t* unmapped_ptr = (uint32_t*)0xDEADBEEF;
   // uint32_t test_val = *unmapped_ptr;
   // tty_write_dec(test_val);
-  
+
   tty_writestring("System initialized.\n");
+
+  // testing userland
+  uintptr_t userstack = 0x8FFF0000;
+  vmm_map(userstack, // random memory for testing
+             (uintptr_t)pmm_alloc_frame(), 1,
+             PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+
+  uintptr_t user_entry = 0x8FFE0000;
+  vmm_map(user_entry, (uintptr_t)pmm_alloc_frame(), 1,
+             PTE_USER | PTE_WRITABLE | PTE_PRESENT);
+  unsigned char user_prog[] = {
+    0xb8, 0x01, 0x00, 0x00, 0x00,
+    0xbb, 'U', 0x00, 0x00, 0x00,
+    0xCD, 0x80,
+    0xB8, 0x00, 0x00, 0x00, 0x00,
+    0xCD, 0x80,
+    0xEB, 0xFE,
+  };
+  memcpy((void*)user_entry, user_prog, sizeof(user_prog));
+  uintptr_t kernel_stack = (uintptr_t)pmm_alloc_frame();
+  uintptr_t kernel_stack_2 = (uintptr_t)pmm_alloc_frame();
+  vmm_map(0xC0FFE000, kernel_stack, 1, PTE_PRESENT | PTE_WRITABLE);
+  vmm_map(0xC0FFF000, kernel_stack_2, 1 , PTE_WRITABLE | PTE_PRESENT);
+  tss_set_kernel_stack(0xC0FFE000 + PMM_PAGE_SIZE);
+  switch_to_user(user_entry, userstack);
+
 
   for (;;) {
     asm volatile("hlt"); // Halt until the next interrupt (if any)
   }
+}
+
+
+void switch_to_user(uintptr_t user_entry, uintptr_t user_stack) {
+
+  asm volatile (
+    "cli\n"
+    "mov %0, %%ax\n"
+    "mov %%ax, %%ds\n"
+    "mov %%ax, %%es\n"
+    "mov %%ax, %%fs\n"
+    "mov %%ax, %%gs\n"
+    
+    "pushl %0\n"
+    "pushl %1\n"
+    "sti\n"
+    "pushfl\n"
+    "popl %%eax\n"
+    "orl $0x200, %%eax\n"
+    "pushl %%eax\n"
+    "pushl %2\n"
+    "pushl %3\n"
+    "iret\n"
+    :
+    : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
+    : "eax", "memory"
+  );
 }

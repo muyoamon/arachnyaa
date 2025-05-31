@@ -20,10 +20,10 @@
 #define PAGE_SIZE 4096
 
 // initalize paging
-void paging_init(void);
+void vmm_init(void);
 
-void paging_map(uintptr_t virt, uintptr_t phys, size_t count, uint64_t flags);
+void vmm_map(uintptr_t virt, uintptr_t phys, size_t count, uint64_t flags);
 
-
+void vmm_unmap(uintptr_t virt);
 
 #endif // ARACHNYAA_MM_PAGING_H_

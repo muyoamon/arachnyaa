@@ -8,10 +8,6 @@
 
 // --- Bitmap PMM ---
 // Let's assume a maximum manageable memory for now to size the bitmap,
-// e.g., 128MB. A more dynamic approach would place the bitmap based on detected
-// memory. 128MB / 4KB/page = 32768 pages. 32768 pages / 8 bits/byte = 4096
-// bytes (4KB) for the bitmap.
-#define PMM_MAX_PAGES (128 * 1024 * 1024 / PMM_PAGE_SIZE)
 #define PHYS_TO_VIRT(p) ((uintptr_t)(p) + (0xC0000000 - 0x100000))
 static uint8_t pmm_bitmap[PMM_MAX_PAGES / 8]; // Statically allocated bitmap
 

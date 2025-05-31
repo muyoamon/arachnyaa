@@ -5,6 +5,7 @@ set(KERNEL_CORE_SOURCES
     pmm.c 
     time.c
     kheap.c
+    syscall.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

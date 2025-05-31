@@ -34,6 +34,9 @@ extern void isr_stub_18(); extern void isr_stub_19(); extern void isr_stub_20();
 
 extern void isr_stub_32();
 extern void isr_stub_33();
+
+
+extern void isr_stub_syscall();
 // ... Add more if needed, or use an array of pointers.
 
 // External assembly function
@@ -88,6 +91,7 @@ void idt_install() {
   idt_set_gate(20, (uintptr_t)isr_stub_20, 0x08, 0x8E);
   idt_set_gate(32, (uintptr_t)isr_stub_32, 0x08, 0x8E);
   idt_set_gate(33, (uintptr_t)isr_stub_33, 0x08, 0x8E);
+  idt_set_gate(0x80, (uintptr_t)isr_stub_syscall, 0x08, 0xEE);
   // Load the IDT
   idt_load((uintptr_t)&idt_ptr);
 

@@ -52,7 +52,14 @@ ISR_NOERRCODE 20  ; Virtualization Exception
 ISR_NOERRCODE 32  ; IRQ0
 ISR_NOERRCODE 33  ; IRQ1
 
-
+; --- syscall
+global isr_stub_syscall
+extern syscall_dispatcher
+isr_stub_syscall:
+  push 0          ; error code 0 
+  push 0x80       ; interrupt number 0x80 
+ 
+  jmp isr_stub_common
 
 ; Common stub called by all ISRs
 isr_stub_common:

@@ -7,6 +7,8 @@
 
 #define PMM_PAGE_SIZE 4096 // 4KB page frames
 
+#define PMM_MAX_PAGES (128 * 1024 * 1024 / PMM_PAGE_SIZE)
+
 // Type field for mmap_entry
 typedef enum { 
   MEMORY_TYPE_FREE = 1,

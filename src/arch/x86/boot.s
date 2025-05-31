@@ -34,6 +34,7 @@ align 4
     ; dd _start ; entry_addr (GRUB fills this)
 
 section .data align=16 
+global gdt_start
 gdt_start:
   ; Null Segment
   dq 0x0000000000000000
@@ -55,6 +56,34 @@ gdt_start:
   db 0x92     ; Access (P=1 DPL=0 S=1, Type=Data,W,A)
   db 0xCF     ; Granularity (G=1, D=1) + Limit (high)
   db 0x00     ; Base (high)
+
+  ; User Code Segment (0x18 - DPL 3)
+  ; Base=0, Limit=4G, Access0xFA (P=1,DPL=3,S=1,Type=Code,R,A), Gran=0xCF
+  dw 0xFFFF   ; Limit (low)
+  dw 0x0000   ; Base (low)
+  db 0x00     ; Base (mid)
+  db 0xFA     ; Access: Present, DPL=3, Code/Data, Type=Execute/Read
+  db 0xCF     ; Granularity: 4KB pages, 32-bit default
+  db 0x00     ; Base (high)
+
+  ; User Data Segment (0x20 - DPL 3)
+  ; Base=0, Limit=4G, Access0xFA (P=1,DPL=3,S=1,Type=Code,W,A), Gran=0xCF
+  dw 0xFFFF   ; Limit (low)
+  dw 0x0000   ; Base (low)
+  db 0x00     ; Base (mid)
+  db 0xF2     ; Access: Present, DPL=3, Code/Data, Type=Read/Write
+  db 0xCF     ; Granularity: 4KB pages, 32-bit default
+  db 0x00     ; Base (high)
+
+  ; TSS Segment (0x28 - DPL 0)
+  dw 0x0067   
+  dw 0x0000 
+  db 0x00 
+  db 0x00 
+  db 0x00 
+  db 0x00
+
+
 gdt_end:
 
 ; GDT Pointer structure (for lgdt)

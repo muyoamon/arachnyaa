@@ -6,6 +6,8 @@
 #define KERNEL_VIRT_BASE 0xC0000000
 #define KERNEL_PHYS_OFFSET (0x100000)
 
+// reserve pdpt:3 pd:510 pt:511 for vmm temp virtual addr
+#define TEMP_MAPPING_BASE 0xFFDFF000
 
 void page_fault_handler(uint32_t error_code);
 
