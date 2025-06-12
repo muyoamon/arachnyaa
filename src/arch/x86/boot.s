@@ -152,25 +152,25 @@ setup_temp_paging:
   rep stosd
 
   lea eax, [pdir0]
-  or eax, 0x01
+  or eax, 0x03
   sub eax, 0xC0000000
   add eax, 0x100000
   mov [pdpt + 0*8 - 0xC0000000 + 0x100000], eax
 
   lea eax, [pdir3]
-  or eax, 0x01
+  or eax, 0x03
   sub eax, 0xC0000000
   add eax, 0x100000
   mov [pdpt + 3*8 - 0xC0000000 + 0x100000], eax
 
   lea eax, [ptable_low]
-  or eax, 0x01
+  or eax, 0x03
   sub eax, 0xC0000000
   add eax, 0x100000
   mov [pdir0 + 0*8 - 0xC0000000 + 0x100000], eax
 
   lea eax, [ptable_high]
-  or eax, 0x01
+  or eax, 0x03
   sub eax, 0xC0000000
   add eax, 0x100000
   mov [pdir3 + 0*8 - 0xC0000000 + 0x100000], eax

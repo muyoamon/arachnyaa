@@ -9,6 +9,8 @@
 
 extern uint64_t pdpt[];
 
+static bool vmm_initialized = false;
+
 static inline void invlpg(void *addr) {
   asm volatile("invlpg (%0)" ::"r"(addr) : "memory");
 }
@@ -23,7 +25,7 @@ static inline uintptr_t phys_to_virt(uintptr_t paddr) {
   return (((uintptr_t)(paddr) + KERNEL_VIRT_BASE - KERNEL_PHYS_OFFSET));
 }
 
-void clear_identity_map(void) {
+void vmm_clear_identity_map(void) {
   if (!(pdpt[0] & 1))
     return;
 
@@ -54,8 +56,10 @@ void vmm_unmap(uintptr_t virt) {
       (uint64_t *)(uintptr_t)((((vaddr >> 9) + (pdpt_idx << 30)) | 0x3FE00000) &
                               ~0xFFF);
   
-  // TODO: actively unmap physical page if refcount == 0.
-
+  uintptr_t phys = v_pt[pt_idx];
+  if (!(--pmm_ref_count[phys / PMM_PAGE_SIZE])) {
+    pmm_free_frame((void*)phys);
+  }
   v_pt[pt_idx] = 0;
   invlpg((void *)(uintptr_t)vaddr);
 }
@@ -82,6 +86,7 @@ void vmm_map(uintptr_t virt, uintptr_t phys, size_t count, uint64_t flags) {
       uint64_t pd_64 = (uintptr_t)pd | flags;
       memcpy((uint64_t*)(v_temp_pd + 511 * sizeof(uint64_t)), &pd_64, sizeof(uint64_t));
       pdpt[pdpt_idx] = (uint64_t)(uintptr_t)pd | flags;
+      pmm_ref_count[(uintptr_t)pd / PMM_PAGE_SIZE]++;
       vmm_unmap(v_temp_pd);
     }
 
@@ -91,11 +96,14 @@ void vmm_map(uintptr_t virt, uintptr_t phys, size_t count, uint64_t flags) {
       vmm_map(v_temp_pt, (uintptr_t)pt, 1, PTE_WRITABLE | PTE_PRESENT);
       memset((uint64_t*)v_temp_pt, 0, PAGE_SIZE);
       v_pd[pd_idx] = (uint64_t)(uintptr_t)pt | flags;
+      pmm_ref_count[(uintptr_t)pt / PMM_PAGE_SIZE]++;
       vmm_unmap(v_temp_pt);
     }
 
     v_pt[pt_idx] = paddr | flags;
 
+    pmm_ref_count[paddr / PMM_PAGE_SIZE]++;
+    
     // invalidate TLB entry
     asm volatile("invlpg (%0)" : : "r"(vaddr) : "memory");
   }
@@ -117,8 +125,12 @@ void vmm_init() {
   ((uint64_t *)(uintptr_t)phys_to_virt(pdpt[3] & ~0xFFF))[510] =
       temp_ptable | PTE_WRITABLE | PTE_PRESENT;
 
-  // unmap identity map
-  clear_identity_map();
+  // reload entire cr3
+  uintptr_t cr3;
+  asm volatile ("mov %%cr3, %0" : "=r"(cr3));
+  asm volatile ("mov %0, %%cr3" :: "r"(cr3));
+  
+  vmm_initialized = true;
 }
 
 void page_fault_handler(uint32_t error_code) {
@@ -145,4 +157,18 @@ void page_fault_handler(uint32_t error_code) {
   tty_writestring(" (error=0x");
   tty_write_hex(error_code);
   tty_writestring(")\n");
+}
+
+
+uintptr_t vmm_get_phys_addr(uintptr_t virt) {
+  if (!vmm_initialized) {
+    return virt;
+  }
+  uint8_t pdpt_idx = (virt >> 30) & 0x3;
+  uint64_t *v_pt =
+      (uint64_t *)(uintptr_t)((((virt >> 9) + (pdpt_idx << 30)) | 0x3FE00000) &
+                              ~0xFFF);
+  uint16_t pt_idx = (virt >> 12) & 0x1FF;
+  uint16_t offset = virt & 0xFFF;
+  return v_pt[pt_idx] + offset;
 }

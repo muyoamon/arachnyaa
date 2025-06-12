@@ -1,21 +1,29 @@
 #ifndef ARACHNYAA_MM_PMM_H_
 #define ARACHNYAA_MM_PMM_H_
 
-
-#include <stdint.h>
 #include <mm/multiboot.h> // For multiboot_info_t
+#include <stddef.h>
+#include <stdint.h>
 
 #define PMM_PAGE_SIZE 4096 // 4KB page frames
 
 #define PMM_MAX_PAGES (128 * 1024 * 1024 / PMM_PAGE_SIZE)
 
+// total pages of pmm
+extern uint64_t pmm_total_pages;
+
+// pointer for pmm bitmap
+extern uint8_t *pmm_bitmap;
+
+extern uint16_t *pmm_ref_count;
+
 // Type field for mmap_entry
-typedef enum { 
+typedef enum {
   MEMORY_TYPE_FREE = 1,
-  MEMORY_TYPE_RESERVED,         
-  MEMORY_TYPE_ACPI_RECLAIMABLE,  
-  MEMORY_TYPE_NVS, 
-  MEMORY_TYPE_BADRAM            
+  MEMORY_TYPE_RESERVED,
+  MEMORY_TYPE_ACPI_RECLAIMABLE,
+  MEMORY_TYPE_NVS,
+  MEMORY_TYPE_BADRAM
 } memory_type_t;
 
 typedef struct {
@@ -24,30 +32,34 @@ typedef struct {
   memory_type_t type;
 } memory_map_entry_t;
 
-
-
-
-
-
 /**
  * @brief Initializes the physical memory manager.
  * @param mb_info Pointer to the Multiboot info structure.
  * @param kernel_code_start Start address of kernel code/data.
- * @param kernel_code_end End address of kernel code/data/bss (before PMM bitmap).
+ * @param kernel_code_end End address of kernel code/data/bss (before PMM
+ * bitmap).
  */
-void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start, uintptr_t kernel_code_end);
+void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
+              uintptr_t kernel_code_end);
+
+/*
+ * @brief Parse memory map
+ */
+void pmm_parse_mmap(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
+                    uintptr_t kernel_code_end, size_t max_pages);
 
 /**
  * @brief Allocates a single physical page frame.
- * @return Physical address of the allocated frame, or NULL if no memory is available.
+ * @return Physical address of the allocated frame, or NULL if no memory is
+ * available.
  */
-void* pmm_alloc_frame(void);
+void *pmm_alloc_frame(void);
 
 /**
  * @brief Frees a previously allocated physical page frame.
  * @param frame_addr Physical address of the frame to free.
  */
-void pmm_free_frame(void* frame_addr);
+void pmm_free_frame(void *frame_addr);
 
 /**
  * @brief Gets the total detected physical memory in bytes.
@@ -58,5 +70,11 @@ uint64_t pmm_get_total_memory_bytes(void);
  * @brief Gets the total free physical memory in bytes.
  */
 uint64_t pmm_get_free_memory_bytes(void);
+
+
+/**
+ * @brief Sets the total used physical memory in bytes.
+ */
+void pmm_set_used_memory_bytes(size_t new_size);
 
 #endif // ARACHNYAA_PMM_PMM_H_

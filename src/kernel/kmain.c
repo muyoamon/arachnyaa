@@ -79,71 +79,60 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   // --- Initialize PMM ---
   pmm_init(mb_info, (uintptr_t)&_kernel_start, (uintptr_t)&_kernel_end);
+  // size_t initial_used_bytes = pmm_get_total_memory_bytes() - pmm_get_free_memory_bytes();
 
   // --- Initialize paging ---
   vmm_init();
 
   // --- Initialize Kernel Heap ---
-  // Allocate, for example, 1MB (256 pages) for the initial heap
+  // Allocate, for example, 4MB for the initial heap
   // This should be done AFTER PMM is initialized.
-#define KHEAP_INITIAL_SIZE (256 * PMM_PAGE_SIZE) // 1MB
+#define KHEAP_INITIAL_SIZE (1024 * PMM_PAGE_SIZE) // 4MiB
   tty_writestring("PMM: Allocating initial kernel heap space (");
   tty_write_dec(KHEAP_INITIAL_SIZE / 1024);
   tty_writestring(" KiB)...\n");
 
-  // Allocate contiguous pages for the heap if possible, or handle
-  // non-contiguous later For simplicity, let's assume PMM can give us a large
-  // enough single block or we get one page For a robust heap, you might
-  // allocate pages one by one and add them. For now, let's just try to get one
-  // page to start.
-  uintptr_t initial_heap_page = (uintptr_t)pmm_alloc_frame();
-  vmm_map(0xC1FFF000, initial_heap_page, 1, PTE_PRESENT | PTE_WRITABLE);
-  initial_heap_page = 0xC1FFF000;
+#define KHEAP_VADDR (0xC0400000)
+  for (size_t i = 0; i < 1024; i++) {
+    vmm_map(KHEAP_VADDR + (i * PMM_PAGE_SIZE), (uintptr_t)pmm_alloc_frame(), 1,
+            PTE_PRESENT | PTE_WRITABLE);
+  }
+
+  uintptr_t initial_heap_page = KHEAP_VADDR;
   if (initial_heap_page) {
     tty_writestring("Kernel heap initial page at: 0x");
     tty_write_hex(initial_heap_page);
     tty_putc('\n');
-    kheap_init((uintptr_t)initial_heap_page, PMM_PAGE_SIZE);
+    kheap_init((uintptr_t)initial_heap_page, KHEAP_INITIAL_SIZE);
     tty_writestring("Kernel heap initialized.\n");
-
-    // Test kmalloc
-    tty_writestring("KHEAP Test:\n");
-    char *test_str = (char *)kmalloc(30);
-    if (test_str) {
-      // You'll need strcpy or similar
-      // For now, let's manually fill:
-      const char *msg = "Heap allocation works!";
-      int i = 0;
-      while (msg[i]) {
-        test_str[i] = msg[i];
-        i++;
-      }
-      test_str[i] = '\0';
-
-      tty_writestring("  kmalloc(30) content: ");
-      tty_writestring(test_str);
-      tty_putc('\n');
-      tty_writestring("  Freeing test_str...\n");
-      kfree(test_str);
-
-      void *p1 = kmalloc(10);
-      void *p2 = kmalloc(100);
-      tty_writestring("  Allocated p1: 0x");
-      tty_write_hex((uintptr_t)p1);
-      tty_writestring(", p2: 0x");
-      tty_write_hex((uintptr_t)p2);
-      tty_putc('\n');
-      kfree(p1);
-      kfree(p2);
-      tty_writestring("  Heap tests done.\n");
-
-    } else {
-      tty_writestring("kmalloc test failed!\n");
-    }
   } else {
     tty_writestring("Failed to allocate initial page for kernel heap!\n");
   }
-  // --- End Kernel Heap Init & Test ---
+  // --- End Kernel Heap Init---
+
+  // --- Remap PMM bitmap and reference counter ---
+  
+  //size_t used_bytes_delta = initial_used_bytes - (pmm_get_total_memory_bytes() - pmm_get_free_memory_bytes());
+  
+  uint16_t *dynamic_pmm_ref_count = kmalloc(pmm_total_pages * 2);
+  memcpy(dynamic_pmm_ref_count, pmm_ref_count, PMM_MAX_PAGES);
+  pmm_ref_count = dynamic_pmm_ref_count;
+  
+  uint8_t *old_pmm_bitmap = pmm_bitmap;
+  pmm_bitmap = kmalloc((pmm_total_pages + 7) / 8);
+  pmm_parse_mmap(mb_info, (uintptr_t)&_kernel_start,
+                 ((uintptr_t)&_kernel_end) - 0xC0000000 + 0x100000,
+                 pmm_total_pages);
+  memcpy(pmm_bitmap, old_pmm_bitmap, PMM_MAX_PAGES / 8);
+
+  // update used memory for inital kernel heap;
+  pmm_set_used_memory_bytes(pmm_get_total_memory_bytes() - pmm_get_free_memory_bytes() + KHEAP_INITIAL_SIZE);
+
+
+
+  // --- Unmap Identity Map ---
+  // unmap identity map
+  vmm_clear_identity_map();
 
   // --- Initialize tss ---
   tty_writestring("Initializing Tss...\t");
@@ -173,83 +162,54 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_write_dec(pmm_get_free_memory_bytes() / (1024 * 1024));
   tty_writestring(" MB\n");
 
-  // Test PMM
-  // void *frame1 = pmm_alloc_frame();
-  // tty_writestring("Allocated frame 1:");
-  // tty_write_hex((uintptr_t)frame1);
-  // tty_putc('\n');
-  // void *frame2 = pmm_alloc_frame();
-  // tty_writestring("Allocated frame 2:");
-  // tty_write_hex((uintptr_t)frame2);
-  // tty_putc('\n');
-  // tty_writestring("Free memory after 2 allocs: ");
-  // tty_write_dec(pmm_get_free_memory_bytes() / (1024 * 1024));
-  // tty_writestring(" MB\n");
-  // pmm_free_frame(frame1);
-  // tty_writestring("Freed frame 1. Free memory: ");
-  // tty_write_dec(pmm_get_free_memory_bytes() / (1024 * 1024));
-  // tty_writestring(" MB\n");
-  // //
-  // uint32_t* unmapped_ptr = (uint32_t*)0xDEADBEEF;
-  // uint32_t test_val = *unmapped_ptr;
-  // tty_write_dec(test_val);
-
   tty_writestring("System initialized.\n");
 
   // testing userland
   uintptr_t userstack = 0x8FFF0000;
   vmm_map(userstack, // random memory for testing
-             (uintptr_t)pmm_alloc_frame(), 1,
-             PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+          (uintptr_t)pmm_alloc_frame(), 1,
+          PTE_PRESENT | PTE_WRITABLE | PTE_USER);
 
   uintptr_t user_entry = 0x8FFE0000;
   vmm_map(user_entry, (uintptr_t)pmm_alloc_frame(), 1,
-             PTE_USER | PTE_WRITABLE | PTE_PRESENT);
+          PTE_USER | PTE_WRITABLE | PTE_PRESENT);
   unsigned char user_prog[] = {
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0xbb, 'U', 0x00, 0x00, 0x00,
-    0xCD, 0x80,
-    0xB8, 0x00, 0x00, 0x00, 0x00,
-    0xCD, 0x80,
-    0xEB, 0xFE,
+      0xb8, 0x01, 0x00, 0x00, 0x00, 0xbb, 'U',  0x00, 0x00, 0x00, 0xCD,
+      0x80, 0xB8, 0x00, 0x00, 0x00, 0x00, 0xCD, 0x80, 0xEB, 0xFE,
   };
-  memcpy((void*)user_entry, user_prog, sizeof(user_prog));
+  memcpy((void *)user_entry, user_prog, sizeof(user_prog));
   uintptr_t kernel_stack = (uintptr_t)pmm_alloc_frame();
   uintptr_t kernel_stack_2 = (uintptr_t)pmm_alloc_frame();
   vmm_map(0xC0FFE000, kernel_stack, 1, PTE_PRESENT | PTE_WRITABLE);
-  vmm_map(0xC0FFF000, kernel_stack_2, 1 , PTE_WRITABLE | PTE_PRESENT);
+  vmm_map(0xC0FFF000, kernel_stack_2, 1, PTE_WRITABLE | PTE_PRESENT);
   tss_set_kernel_stack(0xC0FFE000 + PMM_PAGE_SIZE);
   switch_to_user(user_entry, userstack);
-
 
   for (;;) {
     asm volatile("hlt"); // Halt until the next interrupt (if any)
   }
 }
 
-
 void switch_to_user(uintptr_t user_entry, uintptr_t user_stack) {
 
-  asm volatile (
-    "cli\n"
-    "mov %0, %%ax\n"
-    "mov %%ax, %%ds\n"
-    "mov %%ax, %%es\n"
-    "mov %%ax, %%fs\n"
-    "mov %%ax, %%gs\n"
-    
-    "pushl %0\n"
-    "pushl %1\n"
-    "sti\n"
-    "pushfl\n"
-    "popl %%eax\n"
-    "orl $0x200, %%eax\n"
-    "pushl %%eax\n"
-    "pushl %2\n"
-    "pushl %3\n"
-    "iret\n"
-    :
-    : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
-    : "eax", "memory"
-  );
+  asm volatile("cli\n"
+               "mov %0, %%ax\n"
+               "mov %%ax, %%ds\n"
+               "mov %%ax, %%es\n"
+               "mov %%ax, %%fs\n"
+               "mov %%ax, %%gs\n"
+
+               "pushl %0\n"
+               "pushl %1\n"
+               "sti\n"
+               "pushfl\n"
+               "popl %%eax\n"
+               "orl $0x200, %%eax\n"
+               "pushl %%eax\n"
+               "pushl %2\n"
+               "pushl %3\n"
+               "iret\n"
+               :
+               : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
+               : "eax", "memory");
 }

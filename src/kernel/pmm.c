@@ -1,4 +1,5 @@
 // arachnyaa/src/kernel/pmm.c
+#include "mm/paging.h"
 #include <mm/pmm.h>
 #include <stdbool.h>
 #include <stddef.h> // For NULL
@@ -6,10 +7,21 @@
 #include <string.h> // For memset (you might need to implement this)
 #include <tty.h>    // For debug prints
 
+
+extern uintptr_t vmm_get_phys_addr(uintptr_t virt);
+
 // --- Bitmap PMM ---
-// Let's assume a maximum manageable memory for now to size the bitmap,
+
+uint64_t pmm_total_pages;
+
+uint8_t *pmm_bitmap;
+static uint8_t early_pmm_bitmap[PMM_MAX_PAGES / 8] = {
+    0}; // Statically allocated bitmap
+
+uint16_t *pmm_ref_count;
+static uint16_t early_pmm_ref_count[PMM_MAX_PAGES] = {0};
+
 #define PHYS_TO_VIRT(p) ((uintptr_t)(p) + (0xC0000000 - 0x100000))
-static uint8_t pmm_bitmap[PMM_MAX_PAGES / 8]; // Statically allocated bitmap
 
 static uint32_t total_memory_pages = 0;
 static uint32_t used_memory_pages = 0;
@@ -62,12 +74,64 @@ static void pmm_mark_region_used(uintptr_t base, size_t size) {
 
 void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
               uintptr_t kernel_code_end) {
+  pmm_bitmap = early_pmm_bitmap;
+  pmm_ref_count = early_pmm_ref_count;
   kernel_code_end = kernel_code_end - 0xC0000000 + 0x100000;
+
   tty_writestring("PMM: Initializing Physical Memory Manager...\n");
 
+  pmm_parse_mmap(mb_info, kernel_code_start, kernel_code_end, PMM_MAX_PAGES);
+
+  tty_writestring("PMM: Initialization complete. Free pages: ");
+  tty_write_dec(total_memory_pages - used_memory_pages);
+  tty_putc('\n');
+}
+
+void *pmm_alloc_frame(void) {
+  for (size_t i = 0; i < total_memory_pages; ++i) {
+    if (!pmm_bitmap_test(i)) {
+      pmm_bitmap_set(i);
+      used_memory_pages++;
+      return (void *)(i * PMM_PAGE_SIZE);
+    }
+  }
+  tty_writestring("PMM: Out of memory!\n");
+  return NULL; // Out of memory
+}
+
+void pmm_free_frame(void *frame_addr) {
+  if (frame_addr == NULL)
+    return;
+  uintptr_t addr = (uintptr_t)frame_addr;
+  size_t page_idx = addr / PMM_PAGE_SIZE;
+
+  if (page_idx < total_memory_pages) {
+    if (pmm_bitmap_test(page_idx)) { // Only free if it was used
+      pmm_bitmap_clear(page_idx);
+      used_memory_pages--;
+    } else {
+      // tty_writestring("PMM: Warning! Freeing already free page: 0x");
+      // tty_write_hex(addr); tty_putc('\n');
+    }
+  } else {
+    // tty_writestring("PMM: Warning! Freeing out of bounds page: 0x");
+    // tty_write_hex(addr); tty_putc('\n');
+  }
+}
+
+uint64_t pmm_get_total_memory_bytes(void) {
+  return (uint64_t)total_memory_pages * PMM_PAGE_SIZE;
+}
+
+uint64_t pmm_get_free_memory_bytes(void) {
+  return (uint64_t)(total_memory_pages - used_memory_pages) * PMM_PAGE_SIZE;
+}
+
+void pmm_parse_mmap(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
+                    uintptr_t kernel_code_end, size_t max_pages) {
   tty_writestring("PMM: Multiboot info struct at physical address: 0x");
   tty_write_hex((uintptr_t)mb_info); // Assuming mb_info is already the
-                                        // correct virtual ptr if paging were on
+                                     // correct virtual ptr if paging were on
   tty_writestring("\n");
 
   if (!mb_info) {
@@ -85,7 +149,7 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   // 1. Find the highest memory address from Multiboot map
   if (!(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
     tty_writestring("PMM: No Multiboot memory map (mmap) available! Using "
-                       "mem_lower/upper.\n");
+                    "mem_lower/upper.\n");
     if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
       end_of_highest_region =
           (mb_info->mem_upper * 1024) + (1024 * 1024) - 1; // Approx
@@ -125,7 +189,7 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
       }
       if (entry->size == 0) { // Avoid infinite loop if size is 0
         tty_writestring("PMM: Warning! Mmap entry size is 0. Advancing by "
-                           "default minimum.\n");
+                        "default minimum.\n");
         i += sizeof(multiboot_mmap_entry_t) - sizeof(uint32_t); // Heuristic
       } else {
         i +=
@@ -139,8 +203,9 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   }
 
   if (end_of_highest_region == 0) {
-    tty_writestring("PMM: Error! No valid memory regions foud. Using default 16MB for bitmap sizing");
-    total_memory_pages = (16*1024*1024) / PMM_PAGE_SIZE;
+    tty_writestring("PMM: Error! No valid memory regions foud. Using default "
+                    "16MB for bitmap sizing");
+    total_memory_pages = (16 * 1024 * 1024) / PMM_PAGE_SIZE;
     highest_detected_addr = (16 * 1024 * 1024) - 1;
   } else {
     total_memory_pages = (uint32_t)(end_of_highest_region / PMM_PAGE_SIZE);
@@ -149,20 +214,24 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
     }
     highest_detected_addr = end_of_highest_region - 1;
   }
-  tty_writestring("PMM: Inital total pages calculated: "); tty_write_dec(total_memory_pages); tty_putc('\n');
+  tty_writestring("PMM: Inital total pages calculated: ");
+  tty_write_dec(total_memory_pages);
+  tty_putc('\n');
+  pmm_total_pages = total_memory_pages;
 
-  if (total_memory_pages > PMM_MAX_PAGES) {
-    tty_writestring("PMM: Warning! Detected memory exceeds static bitmap "
-                       "capacity. Clamping to ");
-    tty_write_dec(PMM_MAX_PAGES);
+  if (total_memory_pages > max_pages) {
+    tty_writestring("PMM: Warning! Detected memory exceeds bitmap "
+                    "capacity. Clamping to ");
+    tty_write_dec(max_pages);
     tty_writestring(" pages.\n");
-    total_memory_pages = PMM_MAX_PAGES;
+    total_memory_pages = max_pages;
     highest_detected_addr = (uintptr_t)total_memory_pages * PMM_PAGE_SIZE - 1;
   }
   tty_writestring("PMM: Total pages for bitmap: ");
   tty_write_dec(total_memory_pages);
   tty_writestring("\n");
-    // Initialize bitmap: Mark ALL pages as RESERVED/USED initially.
+  
+  // Initialize bitmap: Mark ALL pages as RESERVED/USED initially.
   // We will then iterate through the memory map and mark AVAILABLE regions as
   // FREE. Using 0xFF means all bits are 1 (used).
   for (size_t i = 0; i < (total_memory_pages + 7) / 8; ++i) {
@@ -227,7 +296,7 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   // This assumes pmm_bitmap is linked right after kernel_code_end.
   // Or if pmm_bitmap is static, kernel_code_end from linker should be after it.
   // Let's pass the bitmap location and size to pmm_mark_region_used.
-  uintptr_t bitmap_addr = (uintptr_t)pmm_bitmap;
+  uintptr_t bitmap_addr = vmm_get_phys_addr((uintptr_t)pmm_bitmap);
   size_t bitmap_actual_size_bytes =
       (total_memory_pages + 7) / 8; // Actual size used
   tty_writestring("PMM: Bitmap region: ");
@@ -237,6 +306,28 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   tty_putc('\n');
   pmm_mark_region_used(bitmap_addr, bitmap_actual_size_bytes);
 
+  // Mark ref count pointer as used;
+  uintptr_t refcount_addr = vmm_get_phys_addr((uintptr_t)pmm_ref_count);
+  size_t refcount_actual_size_bytes =
+      total_memory_pages * 2; // Actual size used
+  tty_writestring("PMM: Bitmap region: ");
+  tty_write_hex(refcount_addr);
+  tty_writestring(" - ");
+  tty_write_hex(refcount_addr + refcount_actual_size_bytes);
+  tty_putc('\n');
+  pmm_mark_region_used(refcount_addr, refcount_actual_size_bytes);
+
+
+  // Mark mmap as used
+  tty_writestring("PMM: MMAP region: ");
+  tty_write_hex((uintptr_t)mb_info->mmap_addr);
+  tty_writestring(" - ");
+  tty_write_hex((uintptr_t)mb_info->mmap_addr + mb_info->mmap_length);
+  tty_putc('\n');
+  pmm_mark_region_used(mb_info->mmap_addr, mb_info->mmap_length);
+  
+
+
   // Mark first page (0x0) as used (contains IVT, BDA, etc.)
   pmm_mark_region_used(0x0, PMM_PAGE_SIZE);
 
@@ -245,42 +336,7 @@ void pmm_init(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   tty_putc('\n');
 }
 
-void *pmm_alloc_frame(void) {
-  for (size_t i = 0; i < total_memory_pages; ++i) {
-    if (!pmm_bitmap_test(i)) {
-      pmm_bitmap_set(i);
-      used_memory_pages++;
-      return (void *)(i * PMM_PAGE_SIZE);
-    }
-  }
-  tty_writestring("PMM: Out of memory!\n");
-  return NULL; // Out of memory
-}
 
-void pmm_free_frame(void *frame_addr) {
-  if (frame_addr == NULL)
-    return;
-  uintptr_t addr = (uintptr_t)frame_addr;
-  size_t page_idx = addr / PMM_PAGE_SIZE;
-
-  if (page_idx < total_memory_pages) {
-    if (pmm_bitmap_test(page_idx)) { // Only free if it was used
-      pmm_bitmap_clear(page_idx);
-      used_memory_pages--;
-    } else {
-      // tty_writestring("PMM: Warning! Freeing already free page: 0x");
-      // tty_write_hex(addr); tty_putc('\n');
-    }
-  } else {
-    // tty_writestring("PMM: Warning! Freeing out of bounds page: 0x");
-    // tty_write_hex(addr); tty_putc('\n');
-  }
-}
-
-uint64_t pmm_get_total_memory_bytes(void) {
-  return (uint64_t)total_memory_pages * PMM_PAGE_SIZE;
-}
-
-uint64_t pmm_get_free_memory_bytes(void) {
-  return (uint64_t)(total_memory_pages - used_memory_pages) * PMM_PAGE_SIZE;
+void pmm_set_used_memory_bytes(size_t new_size) {
+  used_memory_pages = new_size / PMM_PAGE_SIZE;
 }

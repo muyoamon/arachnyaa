@@ -26,4 +26,8 @@ void vmm_map(uintptr_t virt, uintptr_t phys, size_t count, uint64_t flags);
 
 void vmm_unmap(uintptr_t virt);
 
+void vmm_clear_identity_map(void);
+
+uintptr_t vmm_get_phys_addr(uintptr_t virt);
+
 #endif // ARACHNYAA_MM_PAGING_H_
