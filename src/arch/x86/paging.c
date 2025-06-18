@@ -1,11 +1,11 @@
 #include "paging.h"
-#include "tty.h"
+#include "drivers/tty.h"
 #include <mm/paging.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
-#include <stddef.h>
+#include <lib/stddef.h>
 #include <stdint.h>
-#include <string.h>
+#include <lib/string.h>
 
 extern uint64_t pdpt[];
 

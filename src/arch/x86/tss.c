@@ -1,6 +1,6 @@
 // arachnyaa/src/arch/x86/tss.c
 #include <arch/x86/tss.h>
-#include <string.h> // For memset
+#include <lib/string.h> // For memset
 // You'll need access to your GDT entries if you modify them from C.
 // For now, we assume boot.s creates the GDT with a placeholder TSS base/limit.
 // We will update the GDT entry for the TSS from here.

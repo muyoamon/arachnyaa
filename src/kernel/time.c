@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <time.h>
+#include <kernel/time.h>
 
 uint32_t timer_get_ticks() {
   return system_ticks;

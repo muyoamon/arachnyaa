@@ -1,8 +1,8 @@
 // arachnyaa/src/drivers/keyboard.c
 #include <drivers/keyboard.h>
 #include <stdint.h>
-#include <tty.h>          // For tty_putc
-#include <io.h>  // For inb
+#include <drivers/tty.h>          // For tty_putc
+#include <drivers/io.h>  // For inb
 
 
 // Modifier key states

@@ -1,9 +1,9 @@
 // hal.c - Hardware Abstraction Layer for Arachnyaa (x86)
 
-#include <time.h>
-#include <stddef.h>
+#include <kernel/time.h>
+#include <lib/stddef.h>
 #include <stdint.h>
-#include <io.h>
+#include <drivers/io.h>
 
 
 

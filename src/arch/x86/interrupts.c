@@ -1,11 +1,11 @@
 // interrupts.c - C level interrupt handling for Arachnyaa (x86)
 
 #include "hal.h"
-#include "io.h"
+#include "drivers/io.h"
 #include "kernel/syscall.h"
 #include "paging.h"
-#include "time.h"
-#include "tty.h"
+#include "kernel/time.h"
+#include "drivers/tty.h"
 #include <drivers/keyboard.h>
 #include <stdint.h>
 

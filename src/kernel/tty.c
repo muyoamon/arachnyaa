@@ -1,5 +1,5 @@
-#include <tty.h>
-#include <io.h>
+#include <drivers/tty.h>
+#include <drivers/io.h>
 #include <stdint.h>
 #include <stddef.h>
 

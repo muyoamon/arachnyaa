@@ -11,3 +11,5 @@ set(KERNEL_CORE_SOURCES
 target_sources(arachnyaa_kernel PRIVATE
   ${KERNEL_CORE_SOURCES}
 )
+
+# add_subdirectory(process)

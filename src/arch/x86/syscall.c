@@ -1,4 +1,4 @@
-#include "tty.h"
+#include "drivers/tty.h"
 #include <stdint.h>
 uint64_t arch_sys_putc(char c) {
   tty_putc(c);

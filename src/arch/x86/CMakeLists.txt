@@ -47,6 +47,7 @@ set(ARCH_C_SOURCES
     tss.c
     syscall.c
     string.c
+    init.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

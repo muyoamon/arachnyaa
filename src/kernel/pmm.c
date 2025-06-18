@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h> // For NULL
 #include <stdint.h>
-#include <string.h> // For memset (you might need to implement this)
-#include <tty.h>    // For debug prints
+#include <lib/string.h> // For memset 
+#include <drivers/tty.h>    // For debug prints
 
 
 extern uintptr_t vmm_get_phys_addr(uintptr_t virt);
