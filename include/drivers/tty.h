@@ -1,7 +1,7 @@
 #ifndef _ARACHNYAA_TTY_H
 #define _ARACHNYAA_TTY_H
 
-#include <stddef.h>
+#include <lib/stddef.h>
 #include <stdint.h>
 
 #define TAB_HORIZONTAL_SPACE  4

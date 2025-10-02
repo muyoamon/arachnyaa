@@ -1,7 +1,7 @@
 #include <drivers/tty.h>
 #include <drivers/io.h>
 #include <stdint.h>
-#include <stddef.h>
+#include <lib/stddef.h>
 
 // --- VGA Constants ---
 #define VGA_WIDTH 80

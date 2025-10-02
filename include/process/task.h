@@ -2,6 +2,7 @@
 #define ARACHNYAA_PROCESS_TASK_H_
 
 #include "arch/registers.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef enum {
@@ -23,5 +24,20 @@ typedef struct task {
 
   struct task* next;
 } task_t;
+
+/*
+ * @brief create kernel task
+ * @param entry_point entry point of the task
+ * @return return allocated task_t
+ */
+task_t* task_create_kernel_task(void(*entry_point)(void));
+
+
+void task_schedule(void);
+
+void task_init(void);
+
+bool task_context_init(task_t *task, void(*entry_point)(void));
+
 
 #endif // ARACHNYAA_PROCESS_TASK_H_

@@ -1,5 +1,5 @@
-#ifndef _ARACHNYAA_STDDEF_H
-#define _ARACHNYAA_STDDEF_H
+#ifndef _ARACHNYAA_LIB_STDDEF_H
+#define _ARACHNYAA_LIB_STDDEF_H
 
 /*
  * stddef.h - Minimal standard definitions for Arachnyaa OS
@@ -28,4 +28,4 @@ typedef unsigned int size_t;
 typedef long int ptrdiff_t;
 #endif
 
-#endif // _ARACHNYAA_STDDEF_H
+#endif // _ARACHNYAA_LIB_STDDEF_H

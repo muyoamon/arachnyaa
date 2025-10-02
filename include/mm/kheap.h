@@ -2,7 +2,7 @@
 #define ARACHNYAA_MM_KHEAP_H_
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <lib/stddef.h>
 #include <stdint.h>
 
 #define KHEAP_MAGIC 0xDEADBEEF

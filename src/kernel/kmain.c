@@ -1,3 +1,4 @@
+#include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
 #include "mm/layout.h"
@@ -5,7 +6,7 @@
 #include "mm/pmm.h"
 #include "kernel/time.h"
 #include <mm/kheap.h>
-#include <mm/paging.h>
+#include <mm/vmm.h>
 #include <stdint.h>
 #include <lib/string.h>
 #include <drivers/tty.h>
@@ -162,6 +163,17 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring(" MB\n");
 
   tty_writestring("System initialized.\n");
+
+  // ======= Setting Userland ======
+  // uintptr_t user_stack = vmm_alloc(USER_STACK_TOP, 2, 
+  //                                  PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+  // uintptr_t user_entry = vmm_alloc(USER_ENTRY_BASE, 1, 
+  //                                  PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+  
+
+
+
+
 
   // testing userland
   // uintptr_t userstack = 0x8FFF0000;

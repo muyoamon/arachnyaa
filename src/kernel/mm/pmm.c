@@ -1,8 +1,8 @@
 // arachnyaa/src/kernel/pmm.c
-#include "mm/paging.h"
+#include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
-#include <stddef.h> // For NULL
+#include <lib/stddef.h> // For NULL
 #include <stdint.h>
 #include <lib/string.h> // For memset 
 #include <drivers/tty.h>    // For debug prints

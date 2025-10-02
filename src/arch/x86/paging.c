@@ -1,6 +1,6 @@
 #include "paging.h"
 #include "drivers/tty.h"
-#include <mm/paging.h>
+#include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
 #include <lib/stddef.h>

@@ -2,7 +2,7 @@
 #define ARACHNYAA_MM_PMM_H_
 
 #include <mm/multiboot.h> // For multiboot_info_t
-#include <stddef.h>
+#include <lib/stddef.h>
 #include <stdint.h>
 
 #define PMM_PAGE_SIZE 4096 // 4KB page frames

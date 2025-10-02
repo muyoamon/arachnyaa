@@ -8,7 +8,7 @@
 #include "drivers/tty.h"
 #include <drivers/keyboard.h>
 #include <stdint.h>
-
+#include "register.h"
 // Forward declare a simple print function (from hal.c or tty.c)
 void kprint(const char *str);
 void kprint_hex(uint32_t n); // You'll need to implement this
@@ -17,15 +17,6 @@ void kprint_char(char c);
 volatile uint32_t system_ticks = 0;
 
 // A very simple struct to hold register values (passed from ASM)
-struct registers_t {
-  uint32_t gs, fs, es, ds; // segment selector
-
-  uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by pusha.
-  uint32_t int_no;
-  uint32_t err_code; // Pushed by our stubs.
-  uint32_t eip, cs, eflags, useresp,
-      ss; // Pushed by the processor automatically.
-};
 
 const char *exception_messages[] = {
     "Division By Zero",
