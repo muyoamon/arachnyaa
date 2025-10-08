@@ -1,13 +1,20 @@
 #ifndef ARACHNYAA_MM_KSTACK_H_
 #define ARACHNYAA_MM_KSTACK_H_
 
-#include <stddef.h>
+#include "mm/vmm.h"
+#include <lib/stddef.h>
+#include <stdint.h>
 
 typedef struct {
-  void* top;    // stack pointer start
-  void* base;   // lowest address (after guard)
+  uintptr_t top;    // stack pointer start
+  uintptr_t base;   // lowest address (after guard)
   size_t size;  // usable bytes (exclude guards)
 } kstack_t;
+
+
+
+
+void kstack_init();
 
 kstack_t kstack_alloc(size_t size);
 

@@ -1,6 +1,7 @@
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
+#include "mm/kstack.h"
 #include "mm/layout.h"
 #include "mm/multiboot.h"
 #include "mm/pmm.h"
@@ -153,6 +154,21 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("[Enabled]\n");
   tty_set_color(normal_color);
 
+  // Setting kernel stack 
+  tty_writestring("Setting Kernel Stack...\n");
+  kstack_init();
+  tty_writestring("Testing Kernel Stack...\n");
+  kstack_t k = kstack_alloc(2 * PAGE_SIZE);
+  tty_writestring("stack base: ");
+  tty_write_hex(k.base);
+  tty_writestring("\nstack top: ");
+  tty_write_hex(k.top);
+  tty_writestring("\nstack size: ");
+  tty_write_dec(k.size);
+  tty_writestring("\n");
+  kstack_free(&k);
+
+
   // 7. Welcome and Halt
   tty_writestring("\nWelcome to Arachnyaa!\n\n");
   tty_writestring("Total memory: ");
@@ -161,6 +177,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("Free memory:  ");
   tty_write_dec(pmm_get_free_memory_bytes() / (1024 * 1024));
   tty_writestring(" MB\n");
+
+
 
   tty_writestring("System initialized.\n");
 

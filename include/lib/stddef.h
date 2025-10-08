@@ -25,7 +25,7 @@ typedef unsigned int size_t;
  */
 #ifndef _PTRDIFF_T_DEFINED
 #define _PTRDIFF_T_DEFINED
-typedef long int ptrdiff_t;
+typedef int ptrdiff_t;
 #endif
 
 #endif // _ARACHNYAA_LIB_STDDEF_H
