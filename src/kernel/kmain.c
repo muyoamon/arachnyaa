@@ -1,3 +1,4 @@
+#include "arch/irq.h"
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
@@ -6,6 +7,7 @@
 #include "mm/multiboot.h"
 #include "mm/pmm.h"
 #include "kernel/time.h"
+#include "process/thread.h"
 #include <mm/kheap.h>
 #include <mm/vmm.h>
 #include <stdint.h>
@@ -29,6 +31,20 @@ extern char _kernel_start;
 extern char _kernel_end;
 
 void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
+
+
+#define WORKER(ID, STR) static void ID(void *_) {  \
+  for(;;){                                          \
+    tty_writestring(STR);                           \
+    tty_write_hex((uintptr_t) _);                              \
+    for (volatile int i=0; i<500000;i++);           \
+    thread_yield();                                 \
+  }                                                 \
+}                                                   \
+
+
+WORKER(worker1, "[A] ");
+WORKER(worker2, "[B] ");
 
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
@@ -57,7 +73,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     tty_write_hex(magic);
     tty_writestring("\nhalting.\n");
     for (;;) {
-      asm volatile("cli; hlt");
+      cpu_idle();
     }
   }
   tty_set_color(ok_color);
@@ -143,7 +159,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_set_color(normal_color);
 
   tty_writestring("Testing Interrupts...\t");
-  asm volatile("sti");
+  local_irq_enable();
   tty_set_color(ok_color);
   tty_writestring("[Enabled]\n"); // If we get here without a test, it's ok.
   tty_set_color(normal_color);
@@ -182,6 +198,16 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   tty_writestring("System initialized.\n");
 
+  thread_t *t1 = thread_create(worker1, NULL);
+  thread_t *t2 = thread_create(worker2, NULL);
+  rq_push(t1);
+  rq_push(t2);
+  thread_init();
+
+  
+
+
+
   // ======= Setting Userland ======
   // uintptr_t user_stack = vmm_alloc(USER_STACK_TOP, 2, 
   //                                  PTE_PRESENT | PTE_WRITABLE | PTE_USER);
@@ -215,30 +241,30 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // switch_to_user(user_entry, userstack);
   //
   for (;;) {
-    asm volatile("hlt"); // Halt until the next interrupt (if any)
+    cpu_idle(); // Halt until the next interrupt (if any)
   }
 }
-
-void switch_to_user(uintptr_t user_entry, uintptr_t user_stack) {
-
-  asm volatile("cli\n"
-               "mov %0, %%ax\n"
-               "mov %%ax, %%ds\n"
-               "mov %%ax, %%es\n"
-               "mov %%ax, %%fs\n"
-               "mov %%ax, %%gs\n"
-
-               "pushl %0\n"
-               "pushl %1\n"
-               "sti\n"
-               "pushfl\n"
-               "popl %%eax\n"
-               "orl $0x200, %%eax\n"
-               "pushl %%eax\n"
-               "pushl %2\n"
-               "pushl %3\n"
-               "iret\n"
-               :
-               : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
-               : "eax", "memory");
-}
+//
+// void switch_to_user(uintptr_t user_entry, uintptr_t user_stack) {
+//
+//   asm volatile("cli\n"
+//                "mov %0, %%ax\n"
+//                "mov %%ax, %%ds\n"
+//                "mov %%ax, %%es\n"
+//                "mov %%ax, %%fs\n"
+//                "mov %%ax, %%gs\n"
+//
+//                "pushl %0\n"
+//                "pushl %1\n"
+//                "sti\n"
+//                "pushfl\n"
+//                "popl %%eax\n"
+//                "orl $0x200, %%eax\n"
+//                "pushl %%eax\n"
+//                "pushl %2\n"
+//                "pushl %3\n"
+//                "iret\n"
+//                :
+//                : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
+//                : "eax", "memory");
+// }

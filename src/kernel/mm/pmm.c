@@ -92,7 +92,7 @@ void *pmm_alloc_frame(void) {
     if (!pmm_bitmap_test(i)) {
       pmm_bitmap_set(i);
       used_memory_pages++;
-      return (void *)(i * PMM_PAGE_SIZE);
+      return (void *)((uintptr_t)i * PMM_PAGE_SIZE);
     }
   }
   tty_writestring("PMM: Out of memory!\n");
@@ -243,7 +243,7 @@ void pmm_parse_mmap(multiboot_info_t *mb_info, uintptr_t kernel_code_start,
   if ((mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
     tty_writestring("PMM: Parsing Multiboot memory map...\n");
     multiboot_mmap_entry_t *mmap_entry =
-        (multiboot_mmap_entry_t *)mb_info->mmap_addr;
+        (multiboot_mmap_entry_t *)(uintptr_t)mb_info->mmap_addr;
     while ((uintptr_t)mmap_entry < mb_info->mmap_addr + mb_info->mmap_length) {
       tty_writestring("  Region: addr=");
       tty_write_hex((uint32_t)mmap_entry->addr);

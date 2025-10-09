@@ -1,3 +1,4 @@
+#include "arch/irq.h"
 #include <stdint.h>
 #include <kernel/time.h>
 
@@ -8,7 +9,7 @@ uint32_t timer_get_ticks() {
 void timer_sleep_ticks(uint32_t ticks) {
   uint32_t eticks = system_ticks + ticks;
   while(system_ticks < eticks) {
-    asm volatile ("hlt");
+    cpu_idle();
   }
 }
 

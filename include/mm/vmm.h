@@ -122,16 +122,29 @@ bool vmm_release(vmm_region_t *r, uintptr_t base, size_t size);
 // Regional Allocation
 //
 
+/**
+ * @brief Allocate memory in region.
+ *
+ * @param r Pointer to region.
+ * @param size Size in bytes.
+ * @param prot_flags Protection flags.
+ * @param vmm_flags VMM flags.
+ * @param io_addr pointer to input/output address.
+ * @return 0 if success, non-zero otherwise.
+ */
 vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
                                   vmm_prot_t prot_flags, vmm_flags_t vmm_flags,
-                                  uintptr_t *out_addr);
-//
-//
-//  r     pointer to vmm_region_t
-//  base  address of base
-//  size  size of region to free (guard included)
-//
-//
+                                  uintptr_t *io_addr);
+/**
+ * @brief free memory in region.
+ *
+ * @param  r pointer to region.
+ * @param  base base address.
+ * @param size Size in bytes (guard included).
+ * @param guard_below Number of guard pages after base.
+ * @param guard_above Number of guard pages above base+size.
+ * @return 0 if success, non-zero otherwise.
+ */
 vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
                                  size_t guard_below, size_t guard_above);
 

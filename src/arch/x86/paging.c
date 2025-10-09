@@ -40,7 +40,7 @@ void vmm_clear_identity_map(void) {
   for (int i = 0; i < 512; i++) {
     if (pt[i] & 1) {
       pt[i] = 0;
-      invlpg((void *)(i * 0x1000));
+      invlpg((void *)((uintptr_t)i * 0x1000));
     }
   }
 

@@ -20,6 +20,7 @@ set(NASM_SOURCES
   gdt.s 
   idt.s
   tss_asm.s
+  kthread.s
 )
 
 set(ARCH_OBJECTS "")
@@ -48,6 +49,7 @@ set(ARCH_C_SOURCES
     syscall.c
     string.c
     init.c
+    irq.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

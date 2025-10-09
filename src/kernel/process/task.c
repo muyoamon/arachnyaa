@@ -40,3 +40,7 @@ task_t *task_create_kernel_task(void (*entry_point)(void)) {
 
   return new_task;
 }
+
+bool task_context_init(task_t *task, void (*entry_point)(void)) {
+  return task || entry_point;
+}

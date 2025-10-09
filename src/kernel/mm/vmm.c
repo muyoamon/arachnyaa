@@ -100,6 +100,12 @@ static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
     cfg.page_size = PAGE_SIZE;
   }
 
+  if (fl & VMM_MAP_LAZY_COMMIT ) {
+    cfg.pte_flag &= ~PTE_PRESENT;
+  } else {
+    cfg.pte_flag |= PTE_PRESENT;
+  }
+
   return cfg;
 }
 

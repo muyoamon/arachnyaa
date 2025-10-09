@@ -32,8 +32,16 @@ typedef struct tss_entry {
   uint16_t iomap_base; // I/O map base address (offset from TSS base, >= sizeof(TSS))
 } __attribute__((packed)) tss_entry_t;
 
+/**
+ * @brief Initialize tss
+ */
 void tss_init(void);
 
+/**
+ * @brief Set esp0
+ *
+ * @param stack_top_phys address to set to.
+ */
 void tss_set_kernel_stack(uint32_t stack_top_phys);
 
 #endif // ARACHNYAA_ARCH_X86_TSS_H_
