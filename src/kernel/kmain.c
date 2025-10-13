@@ -2,17 +2,19 @@
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
+#include "kernel/time.h"
+#include "kernel/user.h"
+#include "mm/addrspace.h"
 #include "mm/kstack.h"
 #include "mm/layout.h"
 #include "mm/multiboot.h"
 #include "mm/pmm.h"
-#include "kernel/time.h"
 #include "process/thread.h"
+#include <drivers/tty.h>
+#include <lib/string.h>
 #include <mm/kheap.h>
 #include <mm/vmm.h>
 #include <stdint.h>
-#include <lib/string.h>
-#include <drivers/tty.h>
 
 // --- External Functions (Prototypes - should be in proper headers) ---
 // extern void gdt_install(void);
@@ -31,20 +33,6 @@ extern char _kernel_start;
 extern char _kernel_end;
 
 void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
-
-
-#define WORKER(ID, STR) static void ID(void *_) {  \
-  for(;;){                                          \
-    tty_writestring(STR);                           \
-    tty_write_hex((uintptr_t) _);                              \
-    for (volatile int i=0; i<500000;i++);           \
-    thread_yield();                                 \
-  }                                                 \
-}                                                   \
-
-
-WORKER(worker1, "[A] ");
-WORKER(worker2, "[B] ");
 
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
@@ -73,7 +61,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     tty_write_hex(magic);
     tty_writestring("\nhalting.\n");
     for (;;) {
-      cpu_idle();
+      arch_cpu_idle();
     }
   }
   tty_set_color(ok_color);
@@ -105,16 +93,17 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // --- Initialize Kernel Heap ---
   // Allocate, for example, 4MB for the initial heap
   // This should be done AFTER PMM is initialized.
-// #define KHEAP_INITIAL_SIZE (1024 * PMM_PAGE_SIZE) // 4MiB
+  // #define KHEAP_INITIAL_SIZE (1024 * PMM_PAGE_SIZE) // 4MiB
   size_t kheap_size = kheap_end - kheap_base;
   tty_writestring("PMM: Allocating initial kernel heap space (");
   tty_write_dec(kheap_size / 1024);
   tty_writestring(" KiB)...\n");
 
-// #define KHEAP_VADDR (0xC0400000)
+  // #define KHEAP_VADDR (0xC0400000)
   for (size_t i = 0; i < 1024; i++) {
-    vmm_map((uintptr_t)kheap_base + (i * PMM_PAGE_SIZE), (uintptr_t)pmm_alloc_frame(), 1,
-            PTE_PRESENT | PTE_WRITABLE);
+    vmm_map((uintptr_t)kheap_base + (i * PMM_PAGE_SIZE),
+            (uintptr_t)pmm_alloc_frame(), 1,
+            PTE_PRESENT | PTE_WRITABLE | PTE_GLOBAL);
   }
 
   uintptr_t initial_heap_page = (uintptr_t)kheap_base;
@@ -122,7 +111,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     tty_writestring("Kernel heap initial page at: 0x");
     tty_write_hex(initial_heap_page);
     tty_putc('\n');
-    kheap_init((uintptr_t)initial_heap_page, kheap_size);
+    kheap_init(initial_heap_page);
     tty_writestring("Kernel heap initialized.\n");
   } else {
     tty_writestring("Failed to allocate initial page for kernel heap!\n");
@@ -130,11 +119,11 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // --- End Kernel Heap Init---
 
   // --- Remap PMM bitmap and reference counter ---
-  
+
   uint16_t *dynamic_pmm_ref_count = kmalloc(pmm_total_pages * 2);
   memcpy(dynamic_pmm_ref_count, pmm_ref_count, PMM_MAX_PAGES);
   pmm_ref_count = dynamic_pmm_ref_count;
-  
+
   uint8_t *old_pmm_bitmap = pmm_bitmap;
   pmm_bitmap = kmalloc((pmm_total_pages + 7) / 8);
   pmm_parse_mmap(mb_info, (uintptr_t)&_kernel_start,
@@ -143,9 +132,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   memcpy(pmm_bitmap, old_pmm_bitmap, PMM_MAX_PAGES / 8);
 
   // update used memory for inital kernel heap;
-  pmm_set_used_memory_bytes(pmm_get_total_memory_bytes() - pmm_get_free_memory_bytes() + kheap_size);
-
-
+  pmm_set_used_memory_bytes(pmm_get_total_memory_bytes() -
+                            pmm_get_free_memory_bytes() + kheap_size);
 
   // --- Unmap Identity Map ---
   // unmap identity map
@@ -159,7 +147,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_set_color(normal_color);
 
   tty_writestring("Testing Interrupts...\t");
-  local_irq_enable();
+  arch_local_irq_enable();
   tty_set_color(ok_color);
   tty_writestring("[Enabled]\n"); // If we get here without a test, it's ok.
   tty_set_color(normal_color);
@@ -170,7 +158,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("[Enabled]\n");
   tty_set_color(normal_color);
 
-  // Setting kernel stack 
+  // Setting kernel stack
   tty_writestring("Setting Kernel Stack...\n");
   kstack_init();
   tty_writestring("Testing Kernel Stack...\n");
@@ -184,7 +172,6 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("\n");
   kstack_free(&k);
 
-
   // 7. Welcome and Halt
   tty_writestring("\nWelcome to Arachnyaa!\n\n");
   tty_writestring("Total memory: ");
@@ -194,77 +181,32 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_write_dec(pmm_get_free_memory_bytes() / (1024 * 1024));
   tty_writestring(" MB\n");
 
-
-
   tty_writestring("System initialized.\n");
 
-  thread_t *t1 = thread_create(worker1, NULL);
-  thread_t *t2 = thread_create(worker2, NULL);
-  rq_push(t1);
-  rq_push(t2);
-  thread_init();
+  void _user_entry(void);
 
+  addr_space_t *mm = as_create();
+  uintptr_t ustack_ptr;
+  uintptr_t uentry_ptr = (USER_ENTRY_BASE);
+
+  kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
+
+  arch_local_irq_disable();
+
+  tss_set_kernel_stack(ks.top);
+
+  as_load_address_space(mm);
   
 
+  as_map_user_stack(mm, &ustack_ptr);
+  as_map_user_exact(mm, uentry_ptr,
+                    (uintptr_t)_user_entry - 0xC0000000 + 0x100000,
+                    PTE_USER | PTE_WRITABLE | PTE_PRESENT);
 
-
-  // ======= Setting Userland ======
-  // uintptr_t user_stack = vmm_alloc(USER_STACK_TOP, 2, 
-  //                                  PTE_PRESENT | PTE_WRITABLE | PTE_USER);
-  // uintptr_t user_entry = vmm_alloc(USER_ENTRY_BASE, 1, 
-  //                                  PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+  user_enter(uentry_ptr, ustack_ptr);
   
-
-
-
-
-
-  // testing userland
-  // uintptr_t userstack = 0x8FFF0000;
-  // vmm_map(userstack, // random memory for testing
-  //         (uintptr_t)pmm_alloc_frame(), 1,
-  //         PTE_PRESENT | PTE_WRITABLE | PTE_USER);
-  //
-  // uintptr_t user_entry = 0x8FFE0000;
-  // vmm_map(user_entry, (uintptr_t)pmm_alloc_frame(), 1,
-  //         PTE_USER | PTE_WRITABLE | PTE_PRESENT);
-  // unsigned char user_prog[] = {
-  //     0xb8, 0x01, 0x00, 0x00, 0x00, 0xbb, 'U',  0x00, 0x00, 0x00, 0xCD,
-  //     0x80, 0xB8, 0x00, 0x00, 0x00, 0x00, 0xCD, 0x80, 0xEB, 0xFE,
-  // };
-  // memcpy((void *)user_entry, user_prog, sizeof(user_prog));
-  // uintptr_t kernel_stack = (uintptr_t)pmm_alloc_frame();
-  // uintptr_t kernel_stack_2 = (uintptr_t)pmm_alloc_frame();
-  // vmm_map(0xC0FFE000, kernel_stack, 1, PTE_PRESENT | PTE_WRITABLE);
-  // vmm_map(0xC0FFF000, kernel_stack_2, 1, PTE_WRITABLE | PTE_PRESENT);
-  // tss_set_kernel_stack(0xC0FFE000 + PMM_PAGE_SIZE);
-  // switch_to_user(user_entry, userstack);
-  //
   for (;;) {
-    cpu_idle(); // Halt until the next interrupt (if any)
+    arch_cpu_idle(); // Halt until the next interrupt (if any)
   }
 }
-//
-// void switch_to_user(uintptr_t user_entry, uintptr_t user_stack) {
-//
-//   asm volatile("cli\n"
-//                "mov %0, %%ax\n"
-//                "mov %%ax, %%ds\n"
-//                "mov %%ax, %%es\n"
-//                "mov %%ax, %%fs\n"
-//                "mov %%ax, %%gs\n"
-//
-//                "pushl %0\n"
-//                "pushl %1\n"
-//                "sti\n"
-//                "pushfl\n"
-//                "popl %%eax\n"
-//                "orl $0x200, %%eax\n"
-//                "pushl %%eax\n"
-//                "pushl %2\n"
-//                "pushl %3\n"
-//                "iret\n"
-//                :
-//                : "i"(0x23), "r"(user_stack), "i"(0x1B), "r"(user_entry)
-//                : "eax", "memory");
-// }
+

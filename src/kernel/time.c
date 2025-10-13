@@ -9,7 +9,7 @@ uint32_t timer_get_ticks() {
 void timer_sleep_ticks(uint32_t ticks) {
   uint32_t eticks = system_ticks + ticks;
   while(system_ticks < eticks) {
-    cpu_idle();
+    arch_cpu_idle();
   }
 }
 

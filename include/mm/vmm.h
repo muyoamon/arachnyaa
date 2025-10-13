@@ -72,9 +72,10 @@ enum vmm_prot{
 typedef uint32_t vmm_prot_t;
 
 enum vmm_error_code {
-  VMM_ERR_NONE = 0,
-  VMM_ERR_INVAL = -1, // invalid flags/parameter
-  VMM_ERR_PERM = -2,  // invalid permission
+  VMM_ERR_NONE  = 0,    // success; no error
+  VMM_ERR_INVAL = -1,   // invalid flags/parameter
+  VMM_ERR_PERM  = -2,   // invalid permission
+  VMM_ERR_NOMEM = -3,   // no memory
 };
 typedef uint16_t vmm_error_code_t;
 
@@ -98,6 +99,36 @@ void vmm_clear_identity_map(void);
 uintptr_t vmm_get_phys_addr(uintptr_t virt);
 
 //
+// User-space functions
+//
+
+
+/**
+ * @brief create user page table.
+ *
+ * @return physical address of user page table.
+ */
+uintptr_t vmm_create_user_ptable(void);
+
+/**
+ * @brief Map virtual address to physical address in user page table.
+ *
+ * @param[in] utable address of user page table.
+ * @param[in] virt virtual address to map.
+ * @param[in] phys physical address to map to.
+ * @param[in] flags page table flags.
+ */
+void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys, uint64_t flags);
+
+/**
+ * @brief Unmap virtual address in user page table.
+ *
+ * @param[in] utable address of user page table.
+ * @param[in] virt virtual address to unmap.
+ */
+void vmm_unmap_user(uintptr_t utable, uintptr_t virt);
+
+//
 // --- High Level VMM functions ---
 //
 
@@ -110,6 +141,33 @@ int vmm_alloc(uintptr_t virt, size_t pages, uint64_t flags);
 
 // free virtual address
 void vmm_free(uintptr_t virt, size_t pages);
+
+
+//
+// User
+//
+
+
+/**
+ * @brief Map a user region with flags; size is page-rounded.
+ *
+ * @param[in] utable address of user page table.
+ * @param[in] virt virtual address to map.
+ * @param[in] size size in bytes (page-rounded).
+ * @param[in] flags pte flags.
+ * @return 0 if success, non-zero otherwise.
+ */
+vmm_error_code_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags);
+
+/**
+ * @brief Unmap a user region; size is page-rounded.
+ *
+ * @param[in] utable address of user page table.
+ * @param[in] virt Virtual address to unmap.
+ * @param[in] size Size in bytes (page-rounded).
+ * @return 0 if success, non-zero otherwise.
+ */
+vmm_error_code_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size);
 
 //
 // Address Reservation
@@ -125,11 +183,11 @@ bool vmm_release(vmm_region_t *r, uintptr_t base, size_t size);
 /**
  * @brief Allocate memory in region.
  *
- * @param r Pointer to region.
- * @param size Size in bytes.
- * @param prot_flags Protection flags.
- * @param vmm_flags VMM flags.
- * @param io_addr pointer to input/output address.
+ * @param[in] r Pointer to region.
+ * @param[in] size Size in bytes.
+ * @param[in] prot_flags Protection flags.
+ * @param[in] vmm_flags VMM flags.
+ * @param[in/out] io_addr pointer to input/output address.
  * @return 0 if success, non-zero otherwise.
  */
 vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
@@ -138,11 +196,11 @@ vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
 /**
  * @brief free memory in region.
  *
- * @param  r pointer to region.
- * @param  base base address.
- * @param size Size in bytes (guard included).
- * @param guard_below Number of guard pages after base.
- * @param guard_above Number of guard pages above base+size.
+ * @param[in]  r pointer to region.
+ * @param[in]  base base address.
+ * @param[in] size Size in bytes (guard included).
+ * @param[in] guard_below Number of guard pages after base.
+ * @param[in] guard_above Number of guard pages above base+size.
  * @return 0 if success, non-zero otherwise.
  */
 vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,

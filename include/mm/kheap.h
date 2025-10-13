@@ -37,11 +37,10 @@ typedef struct {
 /**
  *  @brief Initialize the kernel heap
  *  should be called after pmm_init
- *  @param initial_heap_start Physical address of the start of the initial heap
- *  @param initial_heap_size Size of the initial heap area in bytes
+ *  @param initial_heap_start address of the start of the initial heap
  * 
  */
-void kheap_init(uintptr_t initial_heap_start, size_t initial_heap_size);
+void kheap_init(uintptr_t heap_base);
 
 /**
  * @brief Allocates a chunk of memory from the kernel heap.

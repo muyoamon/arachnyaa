@@ -7,9 +7,10 @@
 
 
 // opaque type for architecture-dependent registers
-typedef struct registers_t registers_t;
-// typedef registers_t arch_context_t;
-//
+typedef struct registers arch_registers_t;
+
+typedef arch_registers_t arch_context_t;
+
 // arch_context_t context_init(void);
 
 

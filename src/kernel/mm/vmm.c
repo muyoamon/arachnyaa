@@ -157,3 +157,29 @@ vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
 
 
 
+vmm_error_code_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags) {
+  if (size == 0) {
+    return VMM_ERR_INVAL;   // invalid size
+  }
+  size_t page = (size-1) / PAGE_SIZE + 1;
+  for (size_t i = 0; i < page; i++) {
+    uintptr_t phys = (uintptr_t)pmm_alloc_frame();
+    if (!phys) return VMM_ERR_NOMEM;
+    vmm_map_user(utable, virt + i * PAGE_SIZE, phys, flags);
+  }
+
+  return VMM_ERR_NONE;
+}
+
+vmm_error_code_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size) {
+  if (size == 0) {
+    return VMM_ERR_INVAL;
+  }
+
+  size_t page = (size-1) / PAGE_SIZE + 1;
+  for (size_t i = 0; i < page; i++) {
+    vmm_unmap_user(utable, virt + i * PAGE_SIZE);
+  }
+
+  return VMM_ERR_NONE;
+}

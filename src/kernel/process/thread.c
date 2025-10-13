@@ -8,10 +8,10 @@
 #include <stdint.h>
 
 static void thread_trampoline(void (*fn)(void*), void *arg) {
-  local_irq_enable();
+  arch_local_irq_enable();
   fn(arg);
 
-  while (1) cpu_idle();
+  while (1) arch_cpu_idle();
 }
 
 
@@ -67,5 +67,5 @@ void thread_init() {
   current = rq_pop();
   thread_t dummy = {0};
   switch_to(&dummy, current);
-  for(;;) cpu_idle();
+  for(;;) arch_cpu_idle();
 }

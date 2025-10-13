@@ -1,19 +1,21 @@
 
-#include "process/task.h"
+#include "process/process.h"
 #include "mm/kheap.h"
 #include "drivers/tty.h"
 #include <lib/stddef.h>
 #include <stdbool.h>
 #include <lib/string.h>
 
-volatile task_t *current_task = NULL;
-volatile task_t *ready_queue_head = NULL;
+
+
+volatile process_t *current_task = NULL;
+volatile process_t *ready_queue_head = NULL;
 static int32_t next_pid = 1;
 
 /*
  * @brief Initializes the multitasking system
  */
-void tasking_init(void) {
+void process_init(void) {
   current_task = NULL;
   ready_queue_head = NULL;
   tty_writestring("multitasking initialized.\n");
@@ -23,17 +25,17 @@ void tasking_init(void) {
  * @brief Creates a new kernel task.
  * @param entry_point Pointer to the function the task should start executing.
  */
-task_t *task_create_kernel_task(void (*entry_point)(void)) {
-  task_t *new_task = (task_t *)kmalloc(sizeof(task_t));
+process_t *process_create_kernel_process(void (*entry_point)(void)) {
+  process_t *new_task = (process_t *)kmalloc(sizeof(process_t));
   if (!new_task)
     return NULL;
-  memset(new_task, 0, sizeof(task_t));
+  memset(new_task, 0, sizeof(process_t));
 
-  new_task->id = next_pid++;
-  new_task->state = TASK_STATE_READY;
+  new_task->pid = next_pid++;
+  new_task->state = PROCESS_STATE_READY;
 
 
-  bool succeed = task_context_init(new_task, entry_point);
+  bool succeed = process_context_init(new_task, entry_point);
   if (!succeed) {
     return NULL;
   }
@@ -41,6 +43,6 @@ task_t *task_create_kernel_task(void (*entry_point)(void)) {
   return new_task;
 }
 
-bool task_context_init(task_t *task, void (*entry_point)(void)) {
+bool process_context_init(process_t *task, void (*entry_point)(void)) {
   return task || entry_point;
 }

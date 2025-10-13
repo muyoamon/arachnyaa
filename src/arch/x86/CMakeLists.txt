@@ -23,6 +23,8 @@ set(NASM_SOURCES
   kthread.s
 )
 
+add_subdirectory(entry)
+
 set(ARCH_OBJECTS "")
 
 foreach(NASM_SOURCE ${NASM_SOURCES})
@@ -51,6 +53,8 @@ set(ARCH_C_SOURCES
     init.c
     irq.c
 )
+
+add_subdirectory(mm)
 
 target_sources(arachnyaa_kernel PRIVATE
   ${ARCH_C_SOURCES}

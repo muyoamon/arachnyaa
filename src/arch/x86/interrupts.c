@@ -59,7 +59,7 @@ extern uint64_t syscall_dispatcher(uint32_t syscode, uint64_t a0,
 
 // C handler called by the common ASM stub
 // Note: The parameters are pushed on the stack in reverse order by the ASM stub
-void isr_common_stub_handler(struct registers_t *regs) {
+void isr_common_stub_handler(struct registers *regs) {
 
   // syscall
   if (regs->int_no == 0x80) {

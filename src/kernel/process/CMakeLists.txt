@@ -1,5 +1,5 @@
 set(KERNEL_PROCESS_SOURCES
-  task.c
+  process.c
   thread.c
 )
 

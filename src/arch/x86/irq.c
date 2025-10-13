@@ -1,13 +1,13 @@
 #include "arch/irq.h"
 
-void local_irq_enable(void) {
+void arch_local_irq_enable(void) {
   asm volatile ("sti" ::: "memory");
 }
 
-void local_irq_disable(void) {
+void arch_local_irq_disable(void) {
   asm volatile ("cli" ::: "memory");
 }
 
-void cpu_idle(void) {
+void arch_cpu_idle(void) {
   asm volatile ("sti; hlt" ::: "memory");
 }
