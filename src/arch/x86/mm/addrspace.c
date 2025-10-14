@@ -32,7 +32,7 @@ vmm_error_code_t as_map_user_stack(addr_space_t *mm, uintptr_t *out_ustack_top) 
 
   vmm_error_code_t err = as_map_user(mm, base, USER_STACK_SIZE, PTE_WRITABLE | PTE_PRESENT | PTE_USER);
   if (err) return err;
-  *out_ustack_top = USER_STACK_TOP - 32;
+  *out_ustack_top = USER_STACK_TOP;
   return 0;
 }
 

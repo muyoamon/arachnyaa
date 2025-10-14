@@ -92,7 +92,7 @@ static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
   if (prot & VMM_PROT_USER) cfg.pte_flag |= PTE_USER;
   if (prot & VMM_PROT_GLOBAL) cfg.pte_flag |= PTE_GLOBAL;
 
-  if (!(prot & VMM_PROT_EXEC)) cfg.pte_flag |= PTE_NX;
+  // if (!(prot & VMM_PROT_EXEC)) cfg.pte_flag |= PTE_NX;
 
   if (fl & VMM_PAGE_2M) {
     cfg.page_size = 2048;

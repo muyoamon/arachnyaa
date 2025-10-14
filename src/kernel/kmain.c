@@ -161,17 +161,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // Setting kernel stack
   tty_writestring("Setting Kernel Stack...\n");
   kstack_init();
-  tty_writestring("Testing Kernel Stack...\n");
-  kstack_t k = kstack_alloc(2 * PAGE_SIZE);
-  tty_writestring("stack base: ");
-  tty_write_hex(k.base);
-  tty_writestring("\nstack top: ");
-  tty_write_hex(k.top);
-  tty_writestring("\nstack size: ");
-  tty_write_dec(k.size);
-  tty_writestring("\n");
-  kstack_free(&k);
-
+  
   // 7. Welcome and Halt
   tty_writestring("\nWelcome to Arachnyaa!\n\n");
   tty_writestring("Total memory: ");
@@ -191,18 +181,18 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
 
+  as_map_user_stack(mm, &ustack_ptr);
+  as_map_user_exact(mm, uentry_ptr,
+                    (uintptr_t)_user_entry - 0xC0000000 + 0x100000,
+                    PTE_USER | PTE_WRITABLE | PTE_PRESENT);
+
+
   arch_local_irq_disable();
 
   tss_set_kernel_stack(ks.top);
 
   as_load_address_space(mm);
   
-
-  as_map_user_stack(mm, &ustack_ptr);
-  as_map_user_exact(mm, uentry_ptr,
-                    (uintptr_t)_user_entry - 0xC0000000 + 0x100000,
-                    PTE_USER | PTE_WRITABLE | PTE_PRESENT);
-
   user_enter(uentry_ptr, ustack_ptr);
   
   for (;;) {
