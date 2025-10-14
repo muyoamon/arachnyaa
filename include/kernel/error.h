@@ -1,0 +1,21 @@
+#ifndef ARACHNYAA_KERNEL_ERROR_H_
+#define ARACHNYAA_KERNEL_ERROR_H_
+
+typedef enum {
+  KERR_OK = 0,          // success
+  KERR_UNKNOWN,         // unknown failure
+  KERR_NOMEM,           // out of memory
+  KERR_INVAL,           // invalid argument
+  KERR_NOTFOUND,        // resource not found
+  KERR_BUSY,            // resource busy
+  KERR_ACCESS,          // permission denied
+  KERR_NOSPACE,         // out of space
+  KERR_IO,              // I/O error
+  KERR_FAULT,           // invalid memory access
+  KERR_INTERRUPTED,     // operation interrupted
+  KERR_UNSUPPORTED,     // operation not supported
+  KERR_DEADLOCK,        // would cause deadlock
+  KERR_TIMEOUT,         // operation timed out
+} kerror_t;
+
+#endif // ARACHNYAA_KERNEL_ERROR_H_

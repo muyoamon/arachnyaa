@@ -53,31 +53,31 @@ static inline int vmm_exactly_one(vmm_flags_t f, vmm_flags_t mask) {
   return x && !(x & (x - 1));
 }
 
-static vmm_error_code_t vmm_validate (vmm_flags_t vmm_flags) {
+static kerror_t vmm_validate (vmm_flags_t vmm_flags) {
   // Exactly one placement policy
   if (!vmm_exactly_one(vmm_flags, VMMF_PLACE_MASK))
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
 
   // Exactly one backing
   if (!vmm_exactly_one(vmm_flags, VMMF_BACKING_MASK))
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
 
   // private & share is mutually exclusive
   if ((vmm_flags & VMM_MAP_FILE) &&
       !vmm_exactly_one(vmm_flags, VMMF_SHARE_MASK))
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
   if ((vmm_flags & VMM_MAP_ANON) && (vmm_flags & VMMF_SHARE_MASK))
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
 
   // page is default to 4K and are mutually exclusive
   if (!vmm_any(vmm_flags, VMMF_PAGE_MASK)) vmm_flags |= VMM_PAGE_4K;
   if (!vmm_exactly_one(vmm_flags, VMMF_PAGE_MASK)) 
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
 
   if ((vmm_flags & VMMF_GUARD_MASK) && !(vmm_flags & VMM_MAP_ANON))
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
 
-  return VMM_ERR_NONE;
+  return 0;
 
 }
 
@@ -111,10 +111,10 @@ static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
 
 
 
-vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
+kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
                                   vmm_prot_t prot_flags, vmm_flags_t vmm_flags,
                                   uintptr_t *out_addr) {
-  vmm_error_code_t err_code = vmm_validate(vmm_flags);
+  kerror_t err_code = vmm_validate(vmm_flags);
   if (err_code) return err_code;
 
   vmm_pt_cfg cfg = vmm_decode(prot_flags, vmm_flags);
@@ -122,11 +122,11 @@ vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
   uintptr_t base = 0;
   if (vmm_flags & VMM_FIXED) {
     // currently unsupported
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
   } else {
     // hint is currently unsupported; will allocate anywhere
     if (!tracker_reserve(&r->free_map, size, cfg.page_size, &base)) {
-      return VMM_ERR_INVAL;
+      return KERR_INVAL;
     }
   }
 
@@ -144,7 +144,7 @@ vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
   return 0;
 }
 
-vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
+kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
                                  size_t guard_below, size_t guard_above) {
   uintptr_t base_to_free = base + guard_below * PAGE_SIZE;
   size_t size_to_free = size - guard_above * PAGE_SIZE;
@@ -157,23 +157,23 @@ vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
 
 
 
-vmm_error_code_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags) {
+kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags) {
   if (size == 0) {
-    return VMM_ERR_INVAL;   // invalid size
+    return KERR_INVAL;   // invalid size
   }
   size_t page = (size-1) / PAGE_SIZE + 1;
   for (size_t i = 0; i < page; i++) {
     uintptr_t phys = (uintptr_t)pmm_alloc_frame();
-    if (!phys) return VMM_ERR_NOMEM;
+    if (!phys) return KERR_NOMEM;
     vmm_map_user(utable, virt + i * PAGE_SIZE, phys, flags);
   }
 
-  return VMM_ERR_NONE;
+  return 0;
 }
 
-vmm_error_code_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size) {
+kerror_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size) {
   if (size == 0) {
-    return VMM_ERR_INVAL;
+    return KERR_INVAL;
   }
 
   size_t page = (size-1) / PAGE_SIZE + 1;
@@ -181,5 +181,5 @@ vmm_error_code_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t s
     vmm_unmap_user(utable, virt + i * PAGE_SIZE);
   }
 
-  return VMM_ERR_NONE;
+  return 0;
 }

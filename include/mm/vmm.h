@@ -2,6 +2,7 @@
 #define ARACHNYAA_MM_VMM_H_
 
 #include "mm/tracker.h"
+#include <kernel/error.h>
 #include <lib/stddef.h>
 #include <stdint.h>
 
@@ -70,14 +71,6 @@ enum vmm_prot{
 };
 
 typedef uint32_t vmm_prot_t;
-
-enum vmm_error_code {
-  VMM_ERR_NONE  = 0,    // success; no error
-  VMM_ERR_INVAL = -1,   // invalid flags/parameter
-  VMM_ERR_PERM  = -2,   // invalid permission
-  VMM_ERR_NOMEM = -3,   // no memory
-};
-typedef uint16_t vmm_error_code_t;
 
 //
 // --- Low-level VMM functions ---
@@ -157,7 +150,7 @@ void vmm_free(uintptr_t virt, size_t pages);
  * @param[in] flags pte flags.
  * @return 0 if success, non-zero otherwise.
  */
-vmm_error_code_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags);
+kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags);
 
 /**
  * @brief Unmap a user region; size is page-rounded.
@@ -167,7 +160,7 @@ vmm_error_code_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t siz
  * @param[in] size Size in bytes (page-rounded).
  * @return 0 if success, non-zero otherwise.
  */
-vmm_error_code_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size);
+kerror_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size);
 
 //
 // Address Reservation
@@ -190,7 +183,7 @@ bool vmm_release(vmm_region_t *r, uintptr_t base, size_t size);
  * @param[in/out] io_addr pointer to input/output address.
  * @return 0 if success, non-zero otherwise.
  */
-vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
+kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
                                   vmm_prot_t prot_flags, vmm_flags_t vmm_flags,
                                   uintptr_t *io_addr);
 /**
@@ -203,7 +196,7 @@ vmm_error_code_t vmm_alloc_region(vmm_region_t *r, size_t size,
  * @param[in] guard_above Number of guard pages above base+size.
  * @return 0 if success, non-zero otherwise.
  */
-vmm_error_code_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
+kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
                                  size_t guard_below, size_t guard_above);
 
 #endif // ARACHNYAA_MM_VMM_H_

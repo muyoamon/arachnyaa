@@ -19,18 +19,18 @@ addr_space_t* as_create(void) {
   return mm;
 }
 
-vmm_error_code_t as_map_user(addr_space_t *mm, uintptr_t virt, size_t size, uint64_t flags) {
+kerror_t as_map_user(addr_space_t *mm, uintptr_t virt, size_t size, uint64_t flags) {
   return vmm_map_user_range(mm->cr3_phys, virt, size, flags | PTE_USER);
 }
 
-vmm_error_code_t as_unmap_user(addr_space_t *mm, uintptr_t virt, size_t size) {
+kerror_t as_unmap_user(addr_space_t *mm, uintptr_t virt, size_t size) {
   return vmm_unmap_user_range(mm->cr3_phys, virt, size);
 }
 
-vmm_error_code_t as_map_user_stack(addr_space_t *mm, uintptr_t *out_ustack_top) {
+kerror_t as_map_user_stack(addr_space_t *mm, uintptr_t *out_ustack_top) {
   uintptr_t base = (USER_STACK_TOP - USER_STACK_SIZE);
 
-  vmm_error_code_t err = as_map_user(mm, base, USER_STACK_SIZE, PTE_WRITABLE | PTE_PRESENT | PTE_USER);
+  kerror_t err = as_map_user(mm, base, USER_STACK_SIZE, PTE_WRITABLE | PTE_PRESENT | PTE_USER);
   if (err) return err;
   *out_ustack_top = USER_STACK_TOP;
   return 0;

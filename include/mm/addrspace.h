@@ -27,7 +27,7 @@ addr_space_t* as_create(void);
  * @param[in] flags PTE flags
  * @return 0 if success; non-zero otherwise.
  */
-vmm_error_code_t as_map_user(addr_space_t *mm, uintptr_t virt, size_t size, uint64_t flags);
+kerror_t as_map_user(addr_space_t *mm, uintptr_t virt, size_t size, uint64_t flags);
 
 /**
  * @brief Unmap virtual address in user address space.
@@ -37,7 +37,7 @@ vmm_error_code_t as_map_user(addr_space_t *mm, uintptr_t virt, size_t size, uint
  * @param[in] size Size in bytes (page-rounded).
  * @return 0 if success; non-zero otherwise.
  */
-vmm_error_code_t as_unmap_user(addr_space_t *mm, uintptr_t virt, size_t size);
+kerror_t as_unmap_user(addr_space_t *mm, uintptr_t virt, size_t size);
 
 /**
  * @brief Map user stack.
@@ -46,7 +46,7 @@ vmm_error_code_t as_unmap_user(addr_space_t *mm, uintptr_t virt, size_t size);
  * @param[out] out_ustack_top Pointer to user stack top.
  * @return 0 if success, non-zero otherwise.
  */
-vmm_error_code_t as_map_user_stack(addr_space_t *mm, uintptr_t *out_ustack_top);
+kerror_t as_map_user_stack(addr_space_t *mm, uintptr_t *out_ustack_top);
 
 /**
  * @brief Map virtual address to exact physical address in address space.
