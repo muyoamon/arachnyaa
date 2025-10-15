@@ -1,20 +1,9 @@
+#include "kernel/error.h"
 #include "mm/tracker.h"
+#include <lib/stddef.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
-#include <lib/stddef.h>
 #include <stdint.h>
-
-int vmm_alloc(uintptr_t virt, size_t pages, uint64_t flags) {
-  for (size_t i = 0; i < pages; i++) {
-    uintptr_t phys = (uintptr_t)pmm_alloc_frame();
-    if (!phys) {
-      return -1;
-    }
-    vmm_map(virt + (i * PMM_PAGE_SIZE), phys, 1, flags);
-  }
-  return 0;
-}
-
 void vmm_free(uintptr_t virt, size_t pages) {
   for (size_t i = 0; i < pages; i++) {
     vmm_unmap(virt + (i * PMM_PAGE_SIZE));
@@ -53,7 +42,7 @@ static inline int vmm_exactly_one(vmm_flags_t f, vmm_flags_t mask) {
   return x && !(x & (x - 1));
 }
 
-static kerror_t vmm_validate (vmm_flags_t vmm_flags) {
+static kerror_t vmm_validate(vmm_flags_t vmm_flags) {
   // Exactly one placement policy
   if (!vmm_exactly_one(vmm_flags, VMMF_PLACE_MASK))
     return KERR_INVAL;
@@ -70,15 +59,15 @@ static kerror_t vmm_validate (vmm_flags_t vmm_flags) {
     return KERR_INVAL;
 
   // page is default to 4K and are mutually exclusive
-  if (!vmm_any(vmm_flags, VMMF_PAGE_MASK)) vmm_flags |= VMM_PAGE_4K;
-  if (!vmm_exactly_one(vmm_flags, VMMF_PAGE_MASK)) 
+  if (!vmm_any(vmm_flags, VMMF_PAGE_MASK))
+    vmm_flags |= VMM_PAGE_4K;
+  if (!vmm_exactly_one(vmm_flags, VMMF_PAGE_MASK))
     return KERR_INVAL;
 
   if ((vmm_flags & VMMF_GUARD_MASK) && !(vmm_flags & VMM_MAP_ANON))
     return KERR_INVAL;
 
   return 0;
-
 }
 
 typedef struct {
@@ -88,9 +77,12 @@ typedef struct {
 
 static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
   vmm_pt_cfg cfg = {0};
-  if (prot & VMM_PROT_WRITE) cfg.pte_flag |= PTE_WRITABLE;
-  if (prot & VMM_PROT_USER) cfg.pte_flag |= PTE_USER;
-  if (prot & VMM_PROT_GLOBAL) cfg.pte_flag |= PTE_GLOBAL;
+  if (prot & VMM_PROT_WRITE)
+    cfg.pte_flag |= PTE_WRITABLE;
+  if (prot & VMM_PROT_USER)
+    cfg.pte_flag |= PTE_USER;
+  if (prot & VMM_PROT_GLOBAL)
+    cfg.pte_flag |= PTE_GLOBAL;
 
   // if (!(prot & VMM_PROT_EXEC)) cfg.pte_flag |= PTE_NX;
 
@@ -100,7 +92,7 @@ static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
     cfg.page_size = PAGE_SIZE;
   }
 
-  if (fl & VMM_MAP_LAZY_COMMIT ) {
+  if (fl & VMM_MAP_LAZY_COMMIT) {
     cfg.pte_flag &= ~PTE_PRESENT;
   } else {
     cfg.pte_flag |= PTE_PRESENT;
@@ -109,13 +101,11 @@ static inline vmm_pt_cfg vmm_decode(vmm_prot_t prot, vmm_flags_t fl) {
   return cfg;
 }
 
-
-
-kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
-                                  vmm_prot_t prot_flags, vmm_flags_t vmm_flags,
-                                  uintptr_t *out_addr) {
+kerror_t vmm_alloc_region(vmm_region_t *r, size_t size, vmm_prot_t prot_flags,
+                          vmm_flags_t vmm_flags, uintptr_t *out_addr) {
   kerror_t err_code = vmm_validate(vmm_flags);
-  if (err_code) return err_code;
+  if (err_code)
+    return err_code;
 
   vmm_pt_cfg cfg = vmm_decode(prot_flags, vmm_flags);
 
@@ -128,24 +118,16 @@ kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
     if (!tracker_reserve(&r->free_map, size, cfg.page_size, &base)) {
       return KERR_INVAL;
     }
+    vmm_alloc(base, size, vmm_flags, prot_flags, out_addr, NULL);
   }
 
-  size_t guard_low = vmm_has(vmm_flags, VMM_GUARD_BELOW) ? (cfg.page_size) : 0;
-  size_t guard_high = vmm_has(vmm_flags, VMM_GUARD_ABOVE) ? (cfg.page_size) : 0;
-  
-  uintptr_t map_low = base + guard_low;
-  uintptr_t map_high = base + size - guard_high;
-
-  if (vmm_flags & VMM_MAP_ANON) {
-    vmm_alloc(map_low, (map_high - map_low) / cfg.page_size, cfg.pte_flag);
-  }
-
+  vmm_alloc(base, size, vmm_flags, prot_flags, out_addr, NULL);
   *out_addr = base;
   return 0;
 }
 
 kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
-                                 size_t guard_below, size_t guard_above) {
+                         size_t guard_below, size_t guard_above) {
   uintptr_t base_to_free = base + guard_below * PAGE_SIZE;
   size_t size_to_free = size - guard_above * PAGE_SIZE;
 
@@ -155,16 +137,16 @@ kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
   return 0;
 }
 
-
-
-kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags) {
+kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size,
+                            uint64_t flags) {
   if (size == 0) {
-    return KERR_INVAL;   // invalid size
+    return KERR_INVAL; // invalid size
   }
-  size_t page = (size-1) / PAGE_SIZE + 1;
+  size_t page = (size - 1) / PAGE_SIZE + 1;
   for (size_t i = 0; i < page; i++) {
     uintptr_t phys = (uintptr_t)pmm_alloc_frame();
-    if (!phys) return KERR_NOMEM;
+    if (!phys)
+      return KERR_NOMEM;
     vmm_map_user(utable, virt + i * PAGE_SIZE, phys, flags);
   }
 
@@ -176,9 +158,80 @@ kerror_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size) {
     return KERR_INVAL;
   }
 
-  size_t page = (size-1) / PAGE_SIZE + 1;
+  size_t page = (size - 1) / PAGE_SIZE + 1;
   for (size_t i = 0; i < page; i++) {
     vmm_unmap_user(utable, virt + i * PAGE_SIZE);
+  }
+
+  return 0;
+}
+
+typedef void (*_vmm_mmapf_t)(uintptr_t, uintptr_t, size_t, uint64_t);
+static uintptr_t _vmm_utable;
+static inline void _vmm_map_u (uintptr_t v, uintptr_t p, size_t pg, uint64_t fl) {
+  for (size_t i = 0; i < pg; i++)
+  {
+    vmm_map_user(_vmm_utable, v + i * PAGE_SIZE, p + i * PAGE_SIZE, fl);
+  }
+  return;
+}
+static inline void _vmm_map_s (uintptr_t v, uintptr_t p, size_t pg, uint64_t fl) {
+  vmm_map(v, p, pg, fl);
+}
+
+kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
+                   vmm_prot_t prot_flags, uintptr_t *io_addr, uintptr_t *utable) {
+
+
+  kerror_t err_code = vmm_validate(vmm_flags);
+  if (err_code)
+    return err_code;
+
+  vmm_pt_cfg cfg = vmm_decode(prot_flags, vmm_flags);
+
+  if (bytes == 0) return KERR_INVAL;
+
+  // if utable
+  _vmm_mmapf_t _mmapf = _vmm_map_s;
+  if (utable) {
+    _mmapf = _vmm_map_u;
+    _vmm_utable = (uintptr_t)utable;
+  }
+
+  size_t guard_low = vmm_has(vmm_flags, VMM_GUARD_BELOW) ? (cfg.page_size) : 0;
+  size_t guard_high = vmm_has(vmm_flags, VMM_GUARD_ABOVE) ? (cfg.page_size) : 0;
+
+  uintptr_t map_low = virt + guard_low;
+  uintptr_t map_high = virt + bytes - guard_high;
+
+
+
+  if (vmm_flags & VMM_MAP_ANON) {
+    // map from [virt, guard_high)
+    for (size_t i = virt; i < map_high; i += cfg.page_size) {
+      uintptr_t phys;
+      phys  = (uintptr_t)pmm_alloc_frame();
+      if (!phys) {
+        return KERR_NOMEM;
+      }
+      if (i < map_low && guard_low) {
+        _mmapf(map_low, phys, 1, cfg.pte_flag & ~PTE_PRESENT);        
+      } else {
+        if (prot_flags) {
+          _mmapf(i, phys, 1, cfg.pte_flag);
+        }
+      }
+    }
+    if (guard_high) {
+      uintptr_t phys = (uintptr_t)pmm_alloc_frame();
+      if (!phys) {
+        return KERR_NOMEM;
+      }
+      _mmapf(guard_high, phys, 1, cfg.pte_flag & ~PTE_PRESENT); 
+    }
+  } else if (vmm_flags & VMM_MAP_FILE) {
+    //
+    _mmapf(virt, (uintptr_t)io_addr, 1, cfg.pte_flag);
   }
 
   return 0;

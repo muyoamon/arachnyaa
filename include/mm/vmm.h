@@ -25,7 +25,7 @@ typedef struct {
   tracker_tree_t free_map;
 } vmm_region_t;
 
-enum vmm_flags {
+typedef enum vmm_flags {
   VMM_NONE = 0,
 
   // placement
@@ -57,20 +57,16 @@ enum vmm_flags {
   // debug
   VMM_DEBUG_POISON = 1ull << 40,
   VMM_DEBUG_CANARY = 1ull << 41,
-};
+} vmm_flags_t;
 
-typedef uint64_t vmm_flags_t;
-
-enum vmm_prot{
+typedef enum vmm_prot {
   VMM_PROT_NONE = 0,
-  VMM_PROT_READ = 1u << 0,
+  VMM_PROT_READ = 1u,
   VMM_PROT_WRITE = 1u << 1,
   VMM_PROT_EXEC = 1u << 2,
   VMM_PROT_USER = 1u << 3,
   VMM_PROT_GLOBAL = 1u << 4,
-};
-
-typedef uint32_t vmm_prot_t;
+} vmm_prot_t;
 
 //
 // --- Low-level VMM functions ---
@@ -95,7 +91,6 @@ uintptr_t vmm_get_phys_addr(uintptr_t virt);
 // User-space functions
 //
 
-
 /**
  * @brief create user page table.
  *
@@ -111,7 +106,8 @@ uintptr_t vmm_create_user_ptable(void);
  * @param[in] phys physical address to map to.
  * @param[in] flags page table flags.
  */
-void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys, uint64_t flags);
+void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys,
+                  uint64_t flags);
 
 /**
  * @brief Unmap virtual address in user page table.
@@ -126,20 +122,30 @@ void vmm_unmap_user(uintptr_t utable, uintptr_t virt);
 //
 
 //
-// Direct Allocation
+// General Purpose allocation
 //
 
 // allocate virtual address to arbitrary physical address
-int vmm_alloc(uintptr_t virt, size_t pages, uint64_t flags);
+/**
+ * @brief General-purpose allocation API.
+ *
+ * @param[in] virt Virtual address to map.
+ * @param[in] bytes Size in Bytes page-rounded.
+ * @param[in] flags VMM flags.
+ * @param[in] prot_flags Protection flags.
+ * @param[in/out] io_addr input/output address (flags dependent).
+ * @param[in] utable Address of user page table. (Required if VMM_PROT_USER is set).
+ * @return 0 if success; non-zero otherwise.
+ */
+kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t flags,
+                   vmm_prot_t prot_flags, uintptr_t *io_addr, uintptr_t *utable);
 
 // free virtual address
 void vmm_free(uintptr_t virt, size_t pages);
 
-
 //
 // User
 //
-
 
 /**
  * @brief Map a user region with flags; size is page-rounded.
@@ -150,7 +156,8 @@ void vmm_free(uintptr_t virt, size_t pages);
  * @param[in] flags pte flags.
  * @return 0 if success, non-zero otherwise.
  */
-kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size, uint64_t flags);
+kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size,
+                            uint64_t flags);
 
 /**
  * @brief Unmap a user region; size is page-rounded.
@@ -183,9 +190,8 @@ bool vmm_release(vmm_region_t *r, uintptr_t base, size_t size);
  * @param[in/out] io_addr pointer to input/output address.
  * @return 0 if success, non-zero otherwise.
  */
-kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
-                                  vmm_prot_t prot_flags, vmm_flags_t vmm_flags,
-                                  uintptr_t *io_addr);
+kerror_t vmm_alloc_region(vmm_region_t *r, size_t size, vmm_prot_t prot_flags,
+                          vmm_flags_t vmm_flags, uintptr_t *io_addr);
 /**
  * @brief free memory in region.
  *
@@ -197,6 +203,6 @@ kerror_t vmm_alloc_region(vmm_region_t *r, size_t size,
  * @return 0 if success, non-zero otherwise.
  */
 kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
-                                 size_t guard_below, size_t guard_above);
+                         size_t guard_below, size_t guard_above);
 
 #endif // ARACHNYAA_MM_VMM_H_

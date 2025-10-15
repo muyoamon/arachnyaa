@@ -1,7 +1,8 @@
 #ifndef ARACHNYAA_KERNEL_ELF_LOADER_H_
 #define ARACHNYAA_KERNEL_ELF_LOADER_H_
 
-#include "mm/addrspace.h"
+#include "kernel/error.h"
+#include "kernel/mm.h"
 #include <lib/stddef.h>
 #include <stdint.h>
 typedef struct {
@@ -15,10 +16,10 @@ typedef struct {
   uintptr_t hi_va;
 } elf_load_result_t;
 
-bool elf32_load_image(const elf_image_t *img, addr_space_t *as,
+kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
                       elf_load_result_t *out);
 
-bool elf_setup_user_stack(addr_space_t *as, uintptr_t stack_top,
+kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top,
                           const char *argv0, uintptr_t *out_user_sp);
 
 #endif // ARACHNYAA_KERNEL_ELF_LOADER_H_

@@ -54,7 +54,6 @@ set(ARCH_C_SOURCES
     irq.c
 )
 
-add_subdirectory(mm)
 
 target_sources(arachnyaa_kernel PRIVATE
   ${ARCH_C_SOURCES}

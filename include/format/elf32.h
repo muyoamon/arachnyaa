@@ -15,6 +15,11 @@
 #define ET_DYN  3 
 #define EM_386  3 
 
+#define PT_NULL 0 
+#define PT_LOAD 1 
+#define PF_X    0x1 
+#define PF_W    0x2
+#define PF_R    0x4
 
 typedef struct {
   unsigned char e_ident[EI_NIDENT];

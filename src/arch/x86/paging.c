@@ -1,4 +1,5 @@
 #include "paging.h"
+#include "arch/mm.h"
 #include "drivers/tty.h"
 #include <mm/vmm.h>
 #include <mm/pmm.h>
@@ -257,4 +258,9 @@ void vmm_unmap_user(uintptr_t utable, uintptr_t virt) {
   }
   pt[pt_idx] = 0;
   invlpg((void *)(uintptr_t)vaddr);
+}
+
+
+void arch_load_ptable(uintptr_t ptable) {
+  asm volatile("mov %0, %%cr3" :: "r"(ptable) : "memory");
 }

@@ -2,9 +2,9 @@
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
+#include "kernel/mm.h"
 #include "kernel/time.h"
 #include "kernel/user.h"
-#include "mm/addrspace.h"
 #include "mm/kstack.h"
 #include "mm/layout.h"
 #include "mm/multiboot.h"
@@ -161,7 +161,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // Setting kernel stack
   tty_writestring("Setting Kernel Stack...\n");
   kstack_init();
-  
+
   // 7. Welcome and Halt
   tty_writestring("\nWelcome to Arachnyaa!\n\n");
   tty_writestring("Total memory: ");
@@ -175,28 +175,28 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   void _user_entry(void);
 
-  addr_space_t *mm = as_create();
-  uintptr_t ustack_ptr;
+  mm_t *mm = mm_create();
+  uintptr_t ustack_ptr = USER_STACK_TOP;
   uintptr_t uentry_ptr = (USER_ENTRY_BASE);
 
   kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
 
-  as_map_user_stack(mm, &ustack_ptr);
-  as_map_user_exact(mm, uentry_ptr,
-                    (uintptr_t)_user_entry - 0xC0000000 + 0x100000,
-                    PTE_USER | PTE_WRITABLE | PTE_PRESENT);
-
+  mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE,
+         VMM_AUTO | VMM_MAP_ANON | VMM_GUARD_BELOW,
+         VMM_PROT_USER | VMM_PROT_READ | VMM_PROT_WRITE, NULL);
+  vmm_map_user((uintptr_t)mm->ptable, uentry_ptr,
+               ((uintptr_t)_user_entry - 0xC0000000 + 0x100000),
+               PTE_USER | PTE_PRESENT);
 
   arch_local_irq_disable();
 
   tss_set_kernel_stack(ks.top);
 
-  as_load_address_space(mm);
-  
+  mm_load_ptable(mm);
+
   user_enter(uentry_ptr, ustack_ptr);
-  
+
   for (;;) {
     arch_cpu_idle(); // Halt until the next interrupt (if any)
   }
 }
-

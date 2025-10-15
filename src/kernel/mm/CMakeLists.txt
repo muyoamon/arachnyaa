@@ -4,6 +4,7 @@ set(KERNEL_MM_SOURCES
   pmm.c 
   vmm.c
   tracker.c
+  mm.c
 )
 
 

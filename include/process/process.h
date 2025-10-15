@@ -2,7 +2,7 @@
 #define ARACHNYAA_PROCESS_TASK_H_
 
 #include "arch/registers.h"
-#include "mm/addrspace.h"
+#include "kernel/mm.h"
 #include "process/thread.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,7 +17,7 @@ typedef enum {
 typedef struct process {
   int32_t pid, ppid;
   process_state_t state;
-  addr_space_t *mm;
+  mm_t *mm;
   int exit_code;
   thread_t  *main;
   struct process* next;
