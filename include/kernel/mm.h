@@ -5,6 +5,7 @@
 #include "kernel/error.h"
 #include "mm/tracker.h"
 #include "mm/vmm.h"
+#include <lib/stddef.h>
 #include <stdint.h>
 
 typedef struct vma_struct {
@@ -30,11 +31,55 @@ typedef struct {
  */
 mm_t *mm_create(void);
 
+/**
+ * @brief Free user address space.
+ *
+ * @param[in] mm pointer to mm.
+ */
+void mm_free(mm_t *mm);
+
+/**
+ * @brief Generic-purpose memory mapping function.
+ *
+ * @param[in] mm Pointer to memory manager.
+ * @param[in] virt Virtual address to map.
+ * @param[in] len size in bytes (page-rounded).
+ * @param[in] vmm_flags VMM flags.
+ * @param[in] prot_flags Protection flags.
+ * @param[in/out] io_addr input/output address (flags dependent).
+ * @return 0 if success; non-zero otherwise.
+ */
 kerror_t mm_map(mm_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
                 vmm_prot_t prot_flags, uintptr_t *io_addr);
 
-
+/**
+ * @brief Load page table.
+ *
+ * @param[in] mm Pointer to memory manager.
+ */
 static inline void mm_load_ptable(mm_t *mm) {
   return arch_load_ptable((uintptr_t)mm->ptable);
 }
+
+/**
+ * @brief Memory copy onto mm's address.
+ *
+ * @param[in] mm Pointer to memory manager.
+ * @param[in] dest Destination (mm).
+ * @param[in] src Source (current).
+ * @param[in] len Size in bytes.
+ * @return 0 if success, non-zero otherwise.
+ */
+kerror_t mm_memcpy(mm_t *mm, uintptr_t dest, uintptr_t src, size_t len);
+
+/**
+ * @brief Zero memory in mm's address.
+ *
+ * @param[in] mm Pointer to memory manager.
+ * @param[in] addr Address.
+ * @param[in] len Size in bytes.
+ * @return 0 if success, non-zero otherwise.
+ */
+kerror_t mm_zero(mm_t *mm, uintptr_t addr, size_t len);
+
 #endif // ARACHNYAA_KERNEL_MM_H_

@@ -6,8 +6,8 @@
 #define KERNEL_VIRT_BASE 0xC0000000
 #define KERNEL_PHYS_OFFSET (0x100000)
 
-// reserve pdpt:3 pd:510 pt:506-511 for vmm temp virtual addr
-#define TEMP_MAPPING_BASE 0xFFDFA000
+// reserve pdpt:3 pd:510 pt:500-511 for vmm temp virtual addr
+#define TEMP_MAPPING_BASE 0xFFDF4000
 #define TEMP_MAPPING_TOP  0xFFDFF000
 
 #define KERNEL_PDPT_INDEX 3

@@ -37,6 +37,12 @@ thread_t* thread_create(void (*fn)(void *), void *arg) {
   return t;
 }
 
+thread_t* thread_alloc(void) {
+  thread_t *t = kmalloc(sizeof(thread_t));
+  memset(t, 0, sizeof(thread_t));
+  return t;
+}
+
 static thread_t *current, *runq_head, *runq_tail;
 
 void rq_push(thread_t *t) {

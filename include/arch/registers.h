@@ -9,7 +9,7 @@
 // opaque type for architecture-dependent registers
 typedef struct registers arch_registers_t;
 
-typedef arch_registers_t arch_context_t;
+typedef arch_registers_t arch_ctx_t;
 
 // arch_context_t context_init(void);
 

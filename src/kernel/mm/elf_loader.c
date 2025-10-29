@@ -2,11 +2,13 @@
 #include "arch/x86/defs.h"
 #include "format/elf32.h"
 #include "kernel/error.h"
-#include "mm/addrspace.h"
+#include "kernel/mm.h"
 #include "mm/vmm.h"
 #include <lib/stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <lib/string.h>
+
 static bool valid_elf32_header(const Elf32_Ehdr *eh, size_t size) {
   if (size < sizeof(*eh))
     return false;
@@ -41,7 +43,7 @@ static uintptr_t choose_dyn_base(void) {
   return USER_ENTRY_BASE;
 }
 
-kerror_t elf32_load_image(const elf_image_t *img, addr_space_t *as, elf_load_result_t *out) {
+kerror_t elf32_load_image(const elf_image_t *img, mm_t *as, elf_load_result_t *out) {
   if (!img || !img->bytes || img->size < sizeof(Elf32_Ehdr) || !as || !out)
     return KERR_INVAL;
   const Elf32_Ehdr *eh = (const Elf32_Ehdr *)img->bytes;
@@ -81,7 +83,66 @@ kerror_t elf32_load_image(const elf_image_t *img, addr_space_t *as, elf_load_res
     if (file_sz) {
       if (seg_off + file_sz > img->size) return KERR_INVAL; // corrupt file
       // copy file to memory.    
-      
+      kerror_t err = mm_memcpy(as, seg_va, 0, ph->p_filesz);
+      if (err) return err;
     }
+
+    // zero bss data
+    if (mem_sz > file_sz) {
+      uintptr_t bss_start = seg_va + file_sz;
+      size_t bss_len = mem_sz - file_sz;
+      kerror_t err = mm_zero(as, bss_start, bss_len);
+      if (err) return err;
+    }
+
+    if (map_begin < lo) lo = map_begin;
+    if (map_end   > hi) hi = map_end;
+    (void)align;
   }
+  out->entry_va = base + eh->e_entry;
+  out->lo_va = (lo == (uintptr_t)-1) ? 0 : lo;
+  out->hi_va = hi;
+  return 0;
+}
+
+
+kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top, const char *argv0, uintptr_t *out_user_sp) {
+  if (!as || !out_user_sp) return KERR_INVAL;
+  if (!argv0) argv0 = "prog";
+  kerror_t err = 0;
+  /* Layout
+   * [string]
+   * [align]
+   * argv[1]
+   * argv[0]
+   * argc
+   * */
+  size_t len = strlen(argv0) + 1;
+  uintptr_t sp = stack_top;
+
+  sp -= len;
+  uintptr_t user_str = sp;
+  err = mm_memcpy(as, user_str, (uintptr_t)argv0, len);
+  if (err) return err;
+
+  // 4 bytes align
+  sp &= ~0x3u;
+
+  sp -= sizeof(uint32_t);
+  uint32_t zero = 0;
+  err = mm_memcpy(as, sp, (uintptr_t)&zero, sizeof(uint32_t));
+  if (err) return err;
+  
+  sp -= sizeof(uint32_t);
+  uint32_t ptr0 = (uint32_t)user_str;
+  err = mm_memcpy(as, sp, (uintptr_t)&ptr0, sizeof(uint32_t));
+  if (err) return err;
+  
+  sp -= sizeof(uint32_t);
+  uint32_t argc = 1;
+  err = mm_memcpy(as, sp, (uintptr_t)&argc, sizeof(uint32_t));
+  if (err) return err;
+
+  *out_user_sp = sp;
+  return 0;
 }

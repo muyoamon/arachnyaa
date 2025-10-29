@@ -18,4 +18,13 @@ typedef enum {
   KERR_TIMEOUT,         // operation timed out
 } kerror_t;
 
+#define RET_IF_ERR(func, act) { \
+  kerror_t err = func;          \
+  if (err) {                    \
+    act;                        \
+    return err;                 \
+  }                             \
+}                               \
+
+
 #endif // ARACHNYAA_KERNEL_ERROR_H_

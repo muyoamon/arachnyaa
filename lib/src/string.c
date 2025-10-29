@@ -36,3 +36,29 @@ void *memset(void *s, int c, size_t n) {
 
   return s;
 }
+
+size_t strlen(const char* str) {
+  const char* s = str;
+
+  // align pointer to 4 bytes boundary.
+  while ((uintptr_t)s % sizeof(size_t) != 0) {
+    if (*s == '\0') return s - str;
+    s++;
+  }
+
+  const size_t *w = (const size_t *)s;
+
+  const size_t one_mask = 0x01010101UL;
+  const size_t high_bits = 0x80808080UL;
+
+  for (;; w++) {
+    size_t v = *w;
+    if (((v - one_mask) & ~v & high_bits) != 0) {
+      // Found a zero bytes
+      s = (const char *)w;
+      while (*s != '\0')
+        s++;
+      return s - str;
+    }
+  }
+}

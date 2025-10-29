@@ -14,7 +14,6 @@
 #include <lib/string.h>
 #include <mm/kheap.h>
 #include <mm/vmm.h>
-#include <stdint.h>
 
 // --- External Functions (Prototypes - should be in proper headers) ---
 // extern void gdt_install(void);

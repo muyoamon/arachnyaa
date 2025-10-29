@@ -1,6 +1,7 @@
 #include "paging.h"
 #include "arch/mm.h"
 #include "drivers/tty.h"
+#include "kernel/error.h"
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
@@ -216,7 +217,6 @@ void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys, uint64_t fla
 
   vmm_map((uintptr_t)v_pd, pdpt[pdpt_idx] & ~0xFFF, 1, PTE_WRITABLE | PTE_PRESENT);
   
-  // uint64_t* v_pd = (uint64_t*) (phys_to_virt(pdpt[pdpt_idx]) & ~0xFFF);
 
   if (!(v_pd[pd_idx] & PTE_PRESENT)) {
     uint64_t *pt = (uint64_t *)pmm_alloc_frame();
@@ -230,7 +230,6 @@ void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys, uint64_t fla
 
   vmm_map((uintptr_t)v_pt, v_pd[pd_idx] & ~0xFFF, 1, PTE_WRITABLE | PTE_PRESENT);
 
-  // uint64_t* v_pt = (uint64_t*) (phys_to_virt(v_pd[pd_idx]) & ~0xFFF);
 
   v_pt[pt_idx] = paddr | flags;
 
@@ -260,6 +259,68 @@ void vmm_unmap_user(uintptr_t utable, uintptr_t virt) {
   invlpg((void *)(uintptr_t)vaddr);
 }
 
+
+
+kerror_t vmm_cpy_user_range(uintptr_t utable, uintptr_t src, uintptr_t dest, size_t len) {
+  if (len > PAGE_SIZE) return KERR_INVAL;
+
+  uint64_t* pdpt = (uint64_t*)TEMP_MAPPING_TOP;
+  vmm_map((uintptr_t)pdpt, utable , 1, PTE_PRESENT | PTE_WRITABLE);
+  uint32_t vaddr = dest;
+
+  size_t pdpt_idx = (vaddr >> 30) & 0x3;
+  size_t pd_idx = (vaddr >> 21) & 0x1FF;
+  size_t pt_idx = (vaddr >> 12) & 0x1FF;
+  size_t offset = (vaddr) & 0xFFF;
+
+  uint64_t *v_pd = (uint64_t*)(TEMP_MAPPING_BASE + PAGE_SIZE); 
+  uint64_t *v_pt = (uint64_t*)(TEMP_MAPPING_BASE + 2 * PAGE_SIZE);
+  uint8_t  *v_dest = (uint8_t*)(TEMP_MAPPING_BASE + 3 * PAGE_SIZE);
+
+  vmm_map((uintptr_t)v_pd, pdpt[pdpt_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+  vmm_map((uintptr_t)v_pt, v_pd[pd_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+
+  vmm_map((uintptr_t)v_dest, v_pt[pt_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+  memcpy(v_dest + offset, (uint8_t*)src, len);
+  vmm_unmap((uintptr_t)v_dest);
+
+  vmm_unmap((uintptr_t)v_pt);
+  vmm_unmap((uintptr_t)v_pd);
+  vmm_unmap((uintptr_t)pdpt);
+  
+  return 0;
+}
+
+kerror_t vmm_zero_user_range(uintptr_t utable, uintptr_t addr, size_t len) {
+  if (len > PAGE_SIZE) return KERR_INVAL;
+  uint64_t* pdpt = (uint64_t*)TEMP_MAPPING_BASE;
+  vmm_map((uintptr_t)pdpt, utable , 1, PTE_PRESENT | PTE_WRITABLE);
+  uint32_t vaddr = addr;
+
+  size_t pdpt_idx = (vaddr >> 30) & 0x3;
+  size_t pd_idx = (vaddr >> 21) & 0x1FF;
+  size_t pt_idx = (vaddr >> 12) & 0x1FF;
+  size_t offset = (vaddr) & 0xFFF;
+
+  uint64_t *v_pd = (uint64_t*)(TEMP_MAPPING_BASE + PAGE_SIZE); 
+  uint64_t *v_pt = (uint64_t*)(TEMP_MAPPING_BASE + 2 * PAGE_SIZE);
+  uint8_t  *v_dest = (uint8_t*)(TEMP_MAPPING_BASE + 3 * PAGE_SIZE);
+
+  vmm_map((uintptr_t)v_pd, pdpt[pdpt_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+  vmm_map((uintptr_t)v_pt, v_pd[pd_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+
+
+  vmm_map((uintptr_t)v_dest, v_pt[pt_idx] & ~0xFFF, 1, PTE_PRESENT | PTE_WRITABLE);
+  memset(v_dest + offset, 0u, PAGE_SIZE - offset);
+  vmm_unmap((uintptr_t)v_dest);
+
+  vmm_unmap((uintptr_t)v_pt);
+  vmm_unmap((uintptr_t)v_pd);
+  vmm_unmap((uintptr_t)pdpt);
+  
+  return 0;
+
+}
 
 void arch_load_ptable(uintptr_t ptable) {
   asm volatile("mov %0, %%cr3" :: "r"(ptable) : "memory");

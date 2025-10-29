@@ -1,7 +1,10 @@
 #ifndef ARACHNYAA_PROCESS_THREAD_H_
 #define ARACHNYAA_PROCESS_THREAD_H_
 
+#include "arch/registers.h"
 #include <stdint.h>
+
+struct process;
 
 /**
  * struct ctx - thread context
@@ -17,6 +20,7 @@ typedef struct ctx {
  */
 typedef struct thread {
   ctx_t regs;
+  struct process* proc;  
   uintptr_t kstack_base;
   uintptr_t kstack_top;
   int state;  /** 0 = runnable, 1 = exited*/
@@ -24,6 +28,15 @@ typedef struct thread {
 } thread_t;
 
 extern void switch_to(thread_t *prev, thread_t *next);
+
+
+/**
+ * @brief Allocate an empty thread.
+ *
+ * @return pointer to allocated thread.
+ */
+thread_t* thread_alloc(void);
+
 
 thread_t* thread_create(void (*fn)(void*), void *arg);
 

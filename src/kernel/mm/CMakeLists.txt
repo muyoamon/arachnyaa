@@ -5,6 +5,7 @@ set(KERNEL_MM_SOURCES
   vmm.c
   tracker.c
   mm.c
+  elf_loader.c
 )
 
 

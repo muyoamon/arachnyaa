@@ -169,6 +169,24 @@ kerror_t vmm_map_user_range(uintptr_t utable, uintptr_t virt, size_t size,
  */
 kerror_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size);
 
+
+
+/**
+ * @brief Copy to user address space.
+ *
+ * @param[in] utable user table.
+ * @param[in] src Source to copy.
+ * @param[in] dest Destination in user address space.
+ * @param[in] len Size in bytes (must be less than PAGE_SIZE).
+ * @return 0 if success; non-zero otherwise.
+ */
+kerror_t vmm_cpy_user_range(uintptr_t utable, uintptr_t src, uintptr_t dest, size_t len);
+
+kerror_t vmm_zero_user_range(uintptr_t utable, uintptr_t addr, size_t len);
+
+
+
+
 //
 // Address Reservation
 //

@@ -5,6 +5,17 @@
 #include "mm/tracker.h"
 #include "mm/vmm.h"
 #include <lib/string.h>
+#include <stdint.h>
+
+
+#define MIN(a, b) ((a < b) ? a : b)
+
+static inline uintptr_t round_page(uintptr_t addr, size_t pagesize) {
+  return addr & ~(pagesize - 1);
+}
+
+
+
 
 static inline void vma_insert(mm_t *mm, vma_t *vma) {
   for (vma_t *pvma = mm->vmal; pvma != NULL; pvma = pvma->next) {
@@ -26,6 +37,11 @@ mm_t *mm_create(void) {
   return mm;
 }
 
+void mm_free(mm_t *mm) {
+  // TODO:
+  kfree(mm);
+}
+
 kerror_t mm_map(mm_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
                 vmm_prot_t prot_flags, uintptr_t *io_addr) {
   kerror_t err =
@@ -44,4 +60,37 @@ kerror_t mm_map(mm_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
   vma_insert(mm, vma);
 
   return 0;
+}
+
+kerror_t mm_memcpy(mm_t *mm, uintptr_t dest, uintptr_t src, size_t len) {
+  size_t copied = 0;
+  while (copied < len) {
+    uintptr_t u_page = round_page(dest, PAGE_SIZE);
+    size_t page_offset = dest - u_page;
+    size_t chunk = MIN(len - copied, PAGE_SIZE - page_offset);
+
+    kerror_t err = vmm_cpy_user_range((uintptr_t)mm->ptable, src, dest, chunk);
+    if (err) return err;
+
+    dest += chunk;
+    src += chunk;
+    copied += chunk;
+  }
+  return 0;
+}
+
+kerror_t mm_zero(mm_t *mm, uintptr_t addr, size_t len) {
+  size_t copied = 0;
+  while (copied < len) {
+    uintptr_t u_page = round_page(addr, PAGE_SIZE);
+    size_t page_offset = addr - u_page;
+    size_t chunk = MIN(len - copied, PAGE_SIZE - page_offset);
+
+    kerror_t err = vmm_zero_user_range((uintptr_t)mm->ptable, addr, chunk);
+    if (err) return err;
+
+    addr += chunk;
+    copied += chunk;
+  }
+  return 0; 
 }
