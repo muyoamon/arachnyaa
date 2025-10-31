@@ -6,6 +6,7 @@ set(KERNEL_CORE_SOURCES
     tty.c
     time.c
     syscall.c
+    irq.c
 )
 
 

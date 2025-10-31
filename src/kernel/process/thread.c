@@ -1,77 +1,68 @@
 #include "process/thread.h"
-#include "arch/irq.h"
-#include "arch/x86/tss.h"
+#include "arch/context.h"
+#include "arch/cpu.h"
+#include "arch/x86/defs.h"
+#include "drivers/tty.h"
 #include "mm/kheap.h"
 #include "mm/kstack.h"
 #include "mm/vmm.h"
+#include "process/scheduler.h"
 #include <lib/string.h>
 #include <stdint.h>
 
-static void thread_trampoline(void (*fn)(void*), void *arg) {
+int next_tid = 0;
+
+
+
+static void kthread_trampoline(void (*fn)(void*), void *args) {
   arch_local_irq_enable();
-  fn(arg);
 
-  while (1) arch_cpu_idle();
+  fn(args);
+  thread_exit(); // never return;
 }
 
-
-thread_t* thread_create(void (*fn)(void *), void *arg) {
-  thread_t *t = kmalloc(sizeof *t);
-  memset(t, 0, sizeof *t);
-
-  kstack_t ks = kstack_alloc(KSTACK_PAGES * PAGE_SIZE);
-  t->kstack_base = ks.base;
-  t->kstack_top = ks.top;
-
-
-  uint32_t *sp = (uint32_t*)t->kstack_top;
-  
-  *--sp = (uint32_t)(uintptr_t)arg;
-  *--sp = (uint32_t)(uintptr_t)fn;
-  *--sp = 0;
-
-  t->regs.eip = (uint32_t)thread_trampoline;
-  t->regs.esp = (uint32_t)sp;
-  t->state = 0;
-
-  return t;
-}
 
 thread_t* thread_alloc(void) {
   thread_t *t = kmalloc(sizeof(thread_t));
+  if (!t) return NULL;
   memset(t, 0, sizeof(thread_t));
+  t->tid = next_tid++;
   return t;
 }
 
-static thread_t *current, *runq_head, *runq_tail;
-
-void rq_push(thread_t *t) {
-  t->next = NULL;
-  if (!runq_tail) runq_head = runq_tail = t;
-  else runq_tail = runq_tail->next = t;
+void thread_free(thread_t *t) {
+  arch_context_free(t->ctx);
+  kstack_free(&t->kstack);
+  kfree(t);
 }
 
-thread_t* rq_pop(void) {
-  thread_t *t = runq_head;
-  if (t) {
-    runq_head = t->next;
-    if (!runq_head) runq_tail = NULL;
-  }
-  return t;
+
+void thread_ksetup(thread_t *t, void (*entry)(void *), void *args) {
+  kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
+
+  t->kstack = ks;
+  t->state = T_READY;
+
+ void** sp = (void**)t->kstack.top;
+  *--sp = args;
+  *--sp = entry;
+  *--sp = thread_exit;
+  
+  // initialize thread context
+  t->ctx =
+      arch_context_init((void *)kthread_trampoline, (void *)sp);
 }
 
-void thread_yield(void) {
-  thread_t *prev = current;
-  rq_push(prev);
-  current = rq_pop();
+void thread_exit(void) {
+  thread_t *current = scheduler_get_current();
 
-  tss_set_kernel_stack(current->kstack_top);
-  switch_to(prev, current);
+  current->state = T_DEAD;
+
+  // debug
+  tty_writestring("thread exited\n");
+
+
+  scheduler_reschedule();
 }
 
-void thread_init() {
-  current = rq_pop();
-  thread_t dummy = {0};
-  switch_to(&dummy, current);
-  for(;;) arch_cpu_idle();
-}
+

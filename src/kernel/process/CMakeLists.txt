@@ -1,6 +1,9 @@
 set(KERNEL_PROCESS_SOURCES
+  elf_loader.c
   process.c
   thread.c
+  rq.c 
+  scheduler.c
 )
 
 message("kernel process sources")

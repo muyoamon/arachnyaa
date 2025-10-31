@@ -1,17 +1,8 @@
-#ifndef ARACHNYAA_INTERRUPTS_H_
-#define ARACHNYAA_INTERRUPTS_H_
+#ifndef ARACHNYAA_ARCH_REGISTERS_H_
+#define ARACHNYAA_ARCH_REGISTERS_H_
 
-/*
- * Architecture-agnostic header for registers/contexts
- */
+struct registers;
 
-
-// opaque type for architecture-dependent registers
 typedef struct registers arch_registers_t;
 
-typedef arch_registers_t arch_ctx_t;
-
-// arch_context_t context_init(void);
-
-
-#endif // ARACHNYAA_INTERRUPTS_H_
+#endif // ARACHNYAA_ARCH_REGISTERS_H_

@@ -1,4 +1,4 @@
-#include "arch/irq.h"
+#include "arch/cpu.h"
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
 #include "drivers/keyboard.h"
@@ -9,6 +9,8 @@
 #include "mm/layout.h"
 #include "mm/multiboot.h"
 #include "mm/pmm.h"
+#include "process/process.h"
+#include "process/scheduler.h"
 #include "process/thread.h"
 #include <drivers/tty.h>
 #include <lib/string.h>
@@ -32,6 +34,22 @@ extern char _kernel_start;
 extern char _kernel_end;
 
 void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
+
+void thread_sample1(void* arg) {
+  for (;;) {
+    (void)arg;
+    tty_writestring("Hello from thread 1\n");
+  }
+}
+
+void thread_sample2(void* arg) {
+  for (;;) {
+    (void)arg;
+    tty_writestring("Hello from thread 2\n");
+  }
+}
+
+
 
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
@@ -148,7 +166,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("Testing Interrupts...\t");
   arch_local_irq_enable();
   tty_set_color(ok_color);
-  tty_writestring("[Enabled]\n"); // If we get here without a test, it's ok.
+  tty_writestring("[Enabled]\n"); 
   tty_set_color(normal_color);
 
   tty_writestring("Enabling Keyboard...\t");
@@ -172,28 +190,18 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   tty_writestring("System initialized.\n");
 
-  void _user_entry(void);
+  tty_writestring("Initializing scheduler...\n");
+  scheduler_init(20);
 
-  mm_t *mm = mm_create();
-  uintptr_t ustack_ptr = USER_STACK_TOP;
-  uintptr_t uentry_ptr = (USER_ENTRY_BASE);
+  // process_t *p1 = process_create_kernel_process(thread_sample1);
+  // scheduler_add(p1->main);
+  //
+  // process_t *p2 = process_create_kernel_process(thread_sample2);
+  // scheduler_add(p2->main);
+  //
+  scheduler_reschedule();
 
-  kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
-
-  mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE,
-         VMM_AUTO | VMM_MAP_ANON | VMM_GUARD_BELOW,
-         VMM_PROT_USER | VMM_PROT_READ | VMM_PROT_WRITE, NULL);
-  vmm_map_user((uintptr_t)mm->ptable, uentry_ptr,
-               ((uintptr_t)_user_entry - 0xC0000000 + 0x100000),
-               PTE_USER | PTE_PRESENT);
-
-  arch_local_irq_disable();
-
-  tss_set_kernel_stack(ks.top);
-
-  mm_load_ptable(mm);
-
-  user_enter(uentry_ptr, ustack_ptr);
+  // never return;
 
   for (;;) {
     arch_cpu_idle(); // Halt until the next interrupt (if any)

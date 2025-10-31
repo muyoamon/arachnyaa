@@ -1,9 +1,14 @@
+#include "arch/cpu.h"
 #include "kernel/error.h"
 #include "mm/tracker.h"
 #include <lib/stddef.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <stdint.h>
+
+static void crit_enter() { arch_local_irq_disable(); }
+static void crit_exit() { arch_local_irq_enable(); }
+
 void vmm_free(uintptr_t virt, size_t pages) {
   for (size_t i = 0; i < pages; i++) {
     vmm_unmap(virt + (i * PMM_PAGE_SIZE));
@@ -168,28 +173,35 @@ kerror_t vmm_unmap_user_range(uintptr_t utable, uintptr_t virt, size_t size) {
 
 typedef void (*_vmm_mmapf_t)(uintptr_t, uintptr_t, size_t, uint64_t);
 static uintptr_t _vmm_utable;
-static inline void _vmm_map_u (uintptr_t v, uintptr_t p, size_t pg, uint64_t fl) {
-  for (size_t i = 0; i < pg; i++)
-  {
+static inline void _vmm_map_u(uintptr_t v, uintptr_t p, size_t pg,
+                              uint64_t fl) {
+  for (size_t i = 0; i < pg; i++) {
     vmm_map_user(_vmm_utable, v + i * PAGE_SIZE, p + i * PAGE_SIZE, fl);
   }
   return;
 }
-static inline void _vmm_map_s (uintptr_t v, uintptr_t p, size_t pg, uint64_t fl) {
+static inline void _vmm_map_s(uintptr_t v, uintptr_t p, size_t pg,
+                              uint64_t fl) {
   vmm_map(v, p, pg, fl);
 }
 
 kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
-                   vmm_prot_t prot_flags, uintptr_t *io_addr, uintptr_t *utable) {
+                   vmm_prot_t prot_flags, uintptr_t *io_addr,
+                   uintptr_t *utable) {
 
-
+  crit_enter();
   kerror_t err_code = vmm_validate(vmm_flags);
-  if (err_code)
+  if (err_code) {
+    crit_exit();
     return err_code;
+  }
 
   vmm_pt_cfg cfg = vmm_decode(prot_flags, vmm_flags);
 
-  if (bytes == 0) return KERR_INVAL;
+  if (bytes == 0) {
+    crit_exit();
+    return KERR_INVAL;
+  };
 
   // if utable
   _vmm_mmapf_t _mmapf = _vmm_map_s;
@@ -204,18 +216,17 @@ kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
   uintptr_t map_low = virt + guard_low;
   uintptr_t map_high = virt + bytes - guard_high;
 
-
-
   if (vmm_flags & VMM_MAP_ANON) {
     // map from [virt, guard_high)
     for (size_t i = virt; i < map_high; i += cfg.page_size) {
       uintptr_t phys;
-      phys  = (uintptr_t)pmm_alloc_frame();
+      phys = (uintptr_t)pmm_alloc_frame();
       if (!phys) {
+        crit_exit();
         return KERR_NOMEM;
       }
       if (i < map_low && guard_low) {
-        _mmapf(map_low, phys, 1, cfg.pte_flag & ~PTE_PRESENT);        
+        _mmapf(map_low, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
       } else {
         if (prot_flags) {
           _mmapf(i, phys, 1, cfg.pte_flag);
@@ -225,14 +236,16 @@ kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
     if (guard_high) {
       uintptr_t phys = (uintptr_t)pmm_alloc_frame();
       if (!phys) {
+        crit_exit();
         return KERR_NOMEM;
       }
-      _mmapf(guard_high, phys, 1, cfg.pte_flag & ~PTE_PRESENT); 
+      _mmapf(guard_high, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
     }
   } else if (vmm_flags & VMM_MAP_FILE) {
     //
     _mmapf(virt, (uintptr_t)io_addr, 1, cfg.pte_flag);
   }
 
+  crit_exit();
   return 0;
 }

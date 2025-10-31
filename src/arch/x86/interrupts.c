@@ -1,5 +1,6 @@
 // interrupts.c - C level interrupt handling for Arachnyaa (x86)
 
+#include "arch/irq.h"
 #include "hal.h"
 #include "drivers/io.h"
 #include "kernel/syscall.h"
@@ -43,7 +44,7 @@ const char *exception_messages[] = {
     "Machine Check",
     "SIMD Fault",
 
-    "Virtualization Fault" /* Add more */
+    "Virtualization Fault"
 };
 
 #define PIC_MASTER_CMD 0x20
@@ -79,7 +80,7 @@ void isr_common_stub_handler(struct registers *regs) {
   if (regs->int_no >= 32 && regs->int_no <= 47) {
     switch (regs->int_no) {
     case 32: {
-      system_ticks++;
+      timer_isr_handler();
       break;
     }
     case 33: {
@@ -89,6 +90,7 @@ void isr_common_stub_handler(struct registers *regs) {
     }
 
     pic_send_eoi(regs->int_no - 32);
+    irq_exit_tail(regs);
     return;
   }
 

@@ -1,7 +1,8 @@
 #ifndef ARACHNYAA_PROCESS_THREAD_H_
 #define ARACHNYAA_PROCESS_THREAD_H_
 
-#include "arch/registers.h"
+#include "arch/context.h"
+#include "mm/kstack.h"
 #include <stdint.h>
 
 struct process;
@@ -9,25 +10,30 @@ struct process;
 /**
  * struct ctx - thread context
  */
-typedef struct ctx {
-  uint32_t ebp, ebx, esi, edi;
-  uint32_t eip; /** resume point */
-  uint32_t esp; /** resume stack */
-} ctx_t;
+typedef uint32_t tid_t;
+
+typedef enum tstate {
+  T_READY = 0,
+  T_RUNNING,
+  T_BLOCKED,
+  T_SLEEP,
+  T_DEAD,       // dead
+  T_TERM,       // terminated
+} tstate_t;
 
 /**
  * struct thread - thread info
  */
 typedef struct thread {
-  ctx_t regs;
-  struct process* proc;  
-  uintptr_t kstack_base;
-  uintptr_t kstack_top;
-  int state;  /** 0 = runnable, 1 = exited*/
+  tid_t tid;
+  arch_context_t *ctx;
+  struct process* proc;
+  kstack_t kstack;
+  tstate_t state;
+  int priority;
+
   struct thread *next;
 } thread_t;
-
-extern void switch_to(thread_t *prev, thread_t *next);
 
 
 /**
@@ -37,14 +43,29 @@ extern void switch_to(thread_t *prev, thread_t *next);
  */
 thread_t* thread_alloc(void);
 
+/**
+ * @brief Free the thread object.
+ *
+ * @param[in] t Pointer to thread object.
+ */
+void thread_free(thread_t *t);
 
-thread_t* thread_create(void (*fn)(void*), void *arg);
 
-void thread_yield(void);
+/**
+ * @brief Setup kernel thread trampoline.
+ *
+ * @param[in/out] t pointer to thread.
+ * @param[in] entry Kernel thread entry point.
+ * @param[in] args Arguments.
+ */
+void thread_ksetup(thread_t *t, void (*entry)(void*), void* args);
 
-void rq_push(thread_t *t);
+/**
+ * @brief Function to be called to finish thread.
+ *
+ */
+void thread_exit(void);
 
-thread_t* rq_pop(void);
 
-void thread_init();
+
 #endif // ARACHNYAA_PROCESS_THREAD_H_

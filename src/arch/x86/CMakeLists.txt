@@ -20,7 +20,7 @@ set(NASM_SOURCES
   gdt.s 
   idt.s
   tss_asm.s
-  kthread.s
+  context.s
 )
 
 add_subdirectory(entry)
@@ -52,6 +52,7 @@ set(ARCH_C_SOURCES
     string.c
     init.c
     irq.c
+    context.c
 )
 
 

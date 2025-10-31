@@ -1,4 +1,4 @@
-#include "arch/irq.h"
+#include "arch/cpu.h"
 
 void arch_local_irq_enable(void) {
   asm volatile ("sti" ::: "memory");

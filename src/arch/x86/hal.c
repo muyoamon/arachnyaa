@@ -8,6 +8,7 @@
 
 
 
+
 // --- IO ---
 void io_wait() {
   outb(0x80, 0);
@@ -186,6 +187,8 @@ void timer_init_system(uint32_t frequency) {
   uint8_t high_byte = (uint8_t)((divisor >> 8) & 0xFF);
   outb(PIT_CHANNEL0_DATA, low_byte);
   outb(PIT_CHANNEL0_DATA, high_byte);
+
+  system_clock_hz = frequency;
 }
 
 
