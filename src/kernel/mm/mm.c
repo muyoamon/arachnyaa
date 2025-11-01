@@ -18,6 +18,9 @@ static inline uintptr_t round_page(uintptr_t addr, size_t pagesize) {
 
 
 static inline void vma_insert(mm_t *mm, vma_t *vma) {
+  if (mm->vmal == NULL) {
+    mm->vmal = vma;
+  }
   for (vma_t *pvma = mm->vmal; pvma != NULL; pvma = pvma->next) {
     if (vma->base > pvma->base) {
       vma->next = pvma->next;

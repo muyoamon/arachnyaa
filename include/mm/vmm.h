@@ -29,34 +29,34 @@ typedef enum vmm_flags {
   VMM_NONE = 0,
 
   // placement
-  VMM_FIXED = 1ull << 0, // fixed
-  VMM_HINT = 1ull << 1,  // with hint
-  VMM_AUTO = 1ull << 2,  // anywhere
+  VMM_FIXED = 1ul << 0, // fixed
+  VMM_HINT = 1ul << 1,  // with hint
+  VMM_AUTO = 1ul << 2,  // anywhere
 
   // backing/commit
-  VMM_MAP_ANON = 1ull << 8,         // no file
-  VMM_MAP_FILE = 1ull << 9,         // file-backed
-  VMM_MAP_PRIVATE = 1ull << 10,     // copy-on-write
-  VMM_MAP_SHARED = 1ull << 11,      // shared mapping
-  VMM_MAP_LAZY_COMMIT = 1ull << 12, // demand-zero
-  VMM_MAP_POPULATE = 1ull << 13,    // eager commit
+  VMM_MAP_ANON = 1ul << 8,         // no file
+  VMM_MAP_FILE = 1ul << 9,         // file-backed
+  VMM_MAP_PRIVATE = 1ul << 10,     // copy-on-write
+  VMM_MAP_SHARED = 1ul << 11,      // shared mapping
+  VMM_MAP_LAZY_COMMIT = 1ul << 12, // demand-zero
+  VMM_MAP_POPULATE = 1ul << 13,    // eager commit
 
   // guard/stack
-  VMM_GUARD_BELOW = 1ull << 16,
-  VMM_GUARD_ABOVE = 1ull << 17,
-  VMM_STACK_GROWSDOWN = 1ull << 18,
+  VMM_GUARD_BELOW = 1ul << 16,
+  VMM_GUARD_ABOVE = 1ul << 17,
+  VMM_STACK_GROWSDOWN = 1ul << 18,
 
   // page size
-  VMM_PAGE_4K = 1ull << 21,
-  VMM_PAGE_2M = 1ull << 22,
+  VMM_PAGE_4K = 1ul << 21,
+  VMM_PAGE_2M = 1ul << 22,
 
   // physical
-  VMM_PHYS_CONTIG = 1ull << 25,
-  VMM_PHYS_LOW32 = 1ull << 26,
+  VMM_PHYS_CONTIG = 1ul << 25,
+  VMM_PHYS_LOW32 = 1ul << 26,
 
   // debug
-  VMM_DEBUG_POISON = 1ull << 40,
-  VMM_DEBUG_CANARY = 1ull << 41,
+  VMM_DEBUG_POISON = 1ul << 29,
+  VMM_DEBUG_CANARY = 1ul << 30,
 } vmm_flags_t;
 
 typedef enum vmm_prot {

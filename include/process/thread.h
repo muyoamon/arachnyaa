@@ -58,7 +58,10 @@ void thread_free(thread_t *t);
  * @param[in] entry Kernel thread entry point.
  * @param[in] args Arguments.
  */
-void thread_ksetup(thread_t *t, void (*entry)(void*), void* args);
+void thread_ksetup(thread_t *t, void (*entry)(void*), void *args);
+
+
+void thread_usetup(thread_t *t, void (*entry)(void*), void *ustack);
 
 /**
  * @brief Function to be called to finish thread.

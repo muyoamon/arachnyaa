@@ -6,6 +6,7 @@
 #include "kernel/elf_loader.h"
 #include "kernel/error.h"
 #include "kernel/mm.h"
+#include "kernel/user.h"
 #include "mm/kheap.h"
 #include "mm/kstack.h"
 #include "process/thread.h"
@@ -48,13 +49,13 @@ process_t *process_create_kernel_process(void (*entry_point)(void *)) {
   memset(new_task, 0, sizeof(process_t));
 
   new_task->pid = next_pid++;
-
   new_task->mm = mm_create();
 
   thread_t *main_thread = thread_alloc();
   thread_ksetup(main_thread, entry_point, NULL);
   new_task->main = main_thread;
-
+  new_task->main->proc = new_task;
+  
   return new_task;
 }
 
@@ -64,12 +65,13 @@ process_t *process_spawn_from_elf(const elf_image_t *img, const char *argv0) {
   if (!p)
     return NULL;
 
+  p->pid = next_pid++;
+  p->mm = mm_create();
+  
   if (elf32_load_image(img, p->mm, &load)) {
     process_free(p);
     return NULL;
   }
-
-  p->mm = mm_create();
 
   uintptr_t user_sp = 0u;
   if (elf_setup_user_stack(p->mm, USER_STACK_TOP, argv0, &user_sp)) {
@@ -77,19 +79,10 @@ process_t *process_spawn_from_elf(const elf_image_t *img, const char *argv0) {
     return NULL;
   }
 
-
-   
   // setup main thread.
   p->main = thread_alloc();
+  thread_usetup(p->main, (void*)load.entry_va, (void*)user_sp);
   p->main->proc = p;
-  kstack_t ks = kstack_alloc(KSTACK_DEFAULT_SIZE);
-  p->main->kstack = ks;
-
-  // prepare initial context
-  p->main->ctx =
-      arch_context_init((void *)load.entry_va, (void*)ks.top);
-
-  p->pid = next_pid++;
 
   return p;
 }

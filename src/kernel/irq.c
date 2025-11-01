@@ -25,6 +25,5 @@ void irq_exit_tail(arch_registers_t *regs) {
     irq_flags &= ~IRQ_NEED_RESCHED;
     scheduler_reschedule();
   }
-  arch_local_irq_enable();
 }
 

@@ -4,8 +4,9 @@
 #include <stdint.h>
 
 enum {
-  sys_exit = 0,
-  sys_putc
+  SYS_EXIT = 0,
+  SYS_WRITE = 1,
+  SYS_PUTC = 2,
 };
 
 #endif // ARACHNYAA_KERNEL_SYSCALL_H_

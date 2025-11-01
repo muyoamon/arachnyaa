@@ -60,7 +60,9 @@ void vmm_unmap(uintptr_t virt) {
   
   uintptr_t phys = v_pt[pt_idx];
   if (!(--pmm_ref_count[phys / PMM_PAGE_SIZE])) {
-    pmm_free_frame((void*)phys);
+    if (phys) 
+      pmm_free_frame((void*)phys);
+    // leave [0,PAGE_SIZE) as mapped.
   }
   v_pt[pt_idx] = 0;
   invlpg((void *)(uintptr_t)vaddr);
@@ -177,6 +179,7 @@ uintptr_t vmm_get_phys_addr(uintptr_t virt) {
 
 uintptr_t vmm_create_user_ptable() {
   uintptr_t pdpt_phys = (uintptr_t)pmm_alloc_frame();
+  pmm_ref_count[pdpt_phys/PAGE_SIZE]++;
   uint64_t *pdpt_virt = (uint64_t*)TEMP_MAPPING_TOP;
   vmm_map((uintptr_t)pdpt_virt, pdpt_phys, 1, PTE_PRESENT | PTE_WRITABLE);
   memset(pdpt_virt, 0, PAGE_SIZE);
@@ -235,9 +238,9 @@ void vmm_map_user(uintptr_t utable, uintptr_t virt, uintptr_t phys, uint64_t fla
 
   pmm_ref_count[paddr / PMM_PAGE_SIZE]++;
 
-  vmm_unmap((uintptr_t)v_pd);
-  vmm_unmap((uintptr_t)v_pt);
-  vmm_unmap((uintptr_t)pdpt);
+  // vmm_unmap((uintptr_t)v_pd);
+  // vmm_unmap((uintptr_t)v_pt);
+  // vmm_unmap((uintptr_t)pdpt);
 }
 
 void vmm_unmap_user(uintptr_t utable, uintptr_t virt) {

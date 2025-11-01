@@ -13,3 +13,8 @@ void arch_sys_exit(int code) {
   for (;;)
     asm volatile ("hlt");
 }
+
+
+void arch_sys_write(const char* str) {
+  tty_writestring(str);
+}

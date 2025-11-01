@@ -1,6 +1,9 @@
 #include "arch/context.h"
 #include "arch/cpu.h"
+#include "arch/mm.h"
 #include "arch/user.h"
+#include "arch/x86/tss.h"
+#include "kernel/mm.h"
 #include "kernel/time.h"
 #include "kernel/user.h"
 #include "lib/stddef.h"
@@ -43,6 +46,8 @@ void scheduler_init(int time_slice_ms) {
   current_thread = NULL;
 
   process_t *idle = process_create_kernel_process(idle_thread);
+  // set idle process's main thread to be of lowest priority.
+  idle->main->priority = SCHED_PRIO_LEVELS - 1;
   scheduler_add(idle->main);
 }
 
@@ -103,6 +108,17 @@ void scheduler_switch(thread_t *next) {
   current_thread = next;
   next->state = T_RUNNING;
 
+  if (old_t) {
+    if (old_t->proc == next->proc) {
+      // skip table switch
+      arch_context_switch(old_t->ctx, current_thread->ctx);
+      crit_exit();
+    }
+  }
+
+  // table switch 
+  mm_load_ptable(next->proc->mm);
+
   arch_context_switch(old_t->ctx, current_thread->ctx);
   crit_exit();
 }
@@ -118,6 +134,8 @@ void scheduler_reschedule(void) {
       current_thread = next;
       next->state = T_RUNNING;
       // TODO: start first switch.
+      tss_set_kernel_stack(current_thread->kstack.top);
+      mm_load_ptable(current_thread->proc->mm);
       arch_context_first_switch(current_thread->ctx);
     }
     crit_exit();

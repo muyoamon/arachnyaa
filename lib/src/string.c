@@ -62,3 +62,46 @@ size_t strlen(const char* str) {
     }
   }
 }
+
+int strcmp(const char *s1, const char *s2) {
+  const unsigned char *p1 = (const unsigned char*)s1;
+  const unsigned char *p2 = (const unsigned char*)s2;
+
+  typedef uintptr_t word;
+  const size_t align_mask = sizeof(word) - 1;
+
+  while (((uintptr_t)p1 & align_mask) && (uintptr_t)p2 & align_mask) {
+    if (*p1 != *p2) return *p1 - *p2;
+    if (*p1 == '\0') return 0;
+    p1++;
+    p2++;
+  }
+
+  const word *w1 = (const word *)p1;
+  const word *w2 = (const word *)p2;
+
+  // compare word by word
+  while (1) {
+    if (*w1 != *w2) {
+      // fall back to byte.
+      p1 = (const unsigned char *)w1;
+      p2 = (const unsigned char *)w2;
+      while (*p1 == *p2) {
+        if (*p1 == '\0') return 0;
+        p1++;
+        p2++;
+      }
+      return *p1 - *p2;
+    }
+
+    const size_t one_mask = 0x01010101UL;
+    const size_t high_bits = 0x80808080UL;
+    
+    word zero_mask = (*w1 - one_mask) & ~*w1 & high_bits;
+    if (zero_mask) return 0;
+
+    w1++;
+    w2++;
+  }
+
+}

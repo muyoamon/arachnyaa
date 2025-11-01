@@ -27,6 +27,7 @@ target_link_options(arachnyaa_kernel PRIVATE
 add_subdirectory(drivers)
 add_subdirectory(arch)
 add_subdirectory(kernel)
+add_subdirectory(boot)
 
 add_dependencies(arachnyaa_kernel arch_asm_objects)
 

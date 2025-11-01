@@ -1,7 +1,7 @@
 #ifndef ARACHNYAA_MM_PMM_H_
 #define ARACHNYAA_MM_PMM_H_
 
-#include <mm/multiboot.h> // For multiboot_info_t
+#include <boot/multiboot.h> // For multiboot_info_t
 #include <lib/stddef.h>
 #include <stdint.h>
 

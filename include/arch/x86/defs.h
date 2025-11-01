@@ -18,6 +18,9 @@
 
 #define KERNEL_BASE     0xC0000000
 
+#define BOOT_INFO_BASE  0xCFE00000
+#define BOOT_INFO_SIZE  0x100000
+
 #define USER_TOP        0xBFDFF000
 #define USER_STACK_TOP  (USER_TOP & ~0xF)
 #define USER_STACK_SIZE (1<<20)

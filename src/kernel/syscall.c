@@ -3,15 +3,23 @@
 
 extern void arch_sys_exit(int);
 extern uint64_t arch_sys_putc(char);
+extern void arch_sys_write(const char*);
+
 
 uint64_t syscall_dispatcher(uint32_t syscode, uint64_t a0, uint64_t a1, uint64_t a2) {
   switch (syscode) {
-    case sys_exit:
+    case SYS_EXIT:
       arch_sys_exit((int)a0);
       return 0;
-    case sys_putc:
+    case SYS_WRITE:
+      arch_sys_write((const char*)(uintptr_t)a0);
+      return 0;
+    case SYS_PUTC:
       return arch_sys_putc(a0);
     default:
-      return (uint64_t)-1 + a1*a2*0;
+      return -1;
   }
+  (void)a0;
+  (void)a1;
+  (void)a2;
 }

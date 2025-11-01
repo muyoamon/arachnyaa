@@ -14,9 +14,11 @@ add_compile_options(
 
 add_subdirectory(src/)
 add_subdirectory(lib/)
+add_subdirectory(user/)
 
 if(TARGET arachnyaa_kernel)
     set(KERNEL_BINARY ${CMAKE_BINARY_DIR}/src/arachnyaa_kernel)
+    set(INIT_BINARY ${CMAKE_BINARY_DIR}/user/init)
     set(ISO_DIR ${CMAKE_BINARY_DIR}/iso)
     set(ISO_FILE ${CMAKE_BINARY_DIR}/arachnyaa.iso)
 
@@ -34,10 +36,20 @@ if(TARGET arachnyaa_kernel)
         COMMENT "Preparing ISO directory..."
     )
 
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/init
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_init>
+          ${ISO_DIR}/boot/init
+        DEPENDS arachnyaa_init
+        COMMENT "Copy arachnyaa_init to ${ISO_DIR}/boot/init"
+    )
+
+
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/init
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )
@@ -50,23 +62,8 @@ if(TARGET arachnyaa_kernel)
         VERBATIM
     )
 
-    add_custom_target(run-qemu-kernel
-      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY}
-        DEPENDS arachnyaa_kernel
-        COMMENT "Running QEMU..."
-        VERBATIM
-    )
-
-
-    # Run QEMU for Debugging
-    add_custom_target(debug-qemu-kernel
-      COMMAND qemu-system-i386 -kernel ${KERNEL_BINARY} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
-        DEPENDS arachnyaa_kernel
-        COMMENT "Running QEMU in debug mode (localhost:1234)..."
-        VERBATIM
-    )
- add_custom_target(debug-qemu-iso
-   COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+    add_custom_target(debug-qemu-iso
+        COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
         DEPENDS iso
         COMMENT "Running QEMU in debug mode (localhost:1234)..."
         VERBATIM

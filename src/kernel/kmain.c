@@ -1,13 +1,14 @@
 #include "arch/cpu.h"
 #include "arch/x86/defs.h"
 #include "arch/x86/tss.h"
+#include "boot/multiboot.h"
 #include "drivers/keyboard.h"
+#include "kernel/elf_loader.h"
 #include "kernel/mm.h"
 #include "kernel/time.h"
 #include "kernel/user.h"
 #include "mm/kstack.h"
 #include "mm/layout.h"
-#include "mm/multiboot.h"
 #include "mm/pmm.h"
 #include "process/process.h"
 #include "process/scheduler.h"
@@ -16,6 +17,7 @@
 #include <lib/string.h>
 #include <mm/kheap.h>
 #include <mm/vmm.h>
+#include <stdint.h>
 
 // --- External Functions (Prototypes - should be in proper headers) ---
 // extern void gdt_install(void);
@@ -35,21 +37,24 @@ extern char _kernel_end;
 
 void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
 
-void thread_sample1(void* arg) {
+void thread_sample1(void *arg) {
   for (;;) {
     (void)arg;
     tty_writestring("Hello from thread 1\n");
   }
 }
 
-void thread_sample2(void* arg) {
-  for (;;) {
-    (void)arg;
-    tty_writestring("Hello from thread 2\n");
-  }
+void thread_sample2(void *arg) {
+  const char *msg = "Hello from user\n";
+  asm volatile("mov $1, %%eax\n"
+               "mov %0, %%ebx\n"
+               "int $0x80\n"
+               "mov $0, %%eax\n"
+               "xor %%ebx, %%ebx\n"
+               "int $0x80\n" ::"r"(msg)
+               : "eax", "ebx");
+  (void)arg;
 }
-
-
 
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
@@ -163,11 +168,11 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("[OK]\n");
   tty_set_color(normal_color);
 
-  tty_writestring("Testing Interrupts...\t");
-  arch_local_irq_enable();
-  tty_set_color(ok_color);
-  tty_writestring("[Enabled]\n"); 
-  tty_set_color(normal_color);
+  // tty_writestring("Testing Interrupts...\t");
+  // arch_local_irq_enable();
+  // tty_set_color(ok_color);
+  // tty_writestring("[Enabled]\n");
+  // tty_set_color(normal_color);
 
   tty_writestring("Enabling Keyboard...\t");
   keyboard_init();
@@ -191,19 +196,27 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   tty_writestring("System initialized.\n");
 
   tty_writestring("Initializing scheduler...\n");
+  arch_local_irq_disable();
   scheduler_init(20);
 
-  // process_t *p1 = process_create_kernel_process(thread_sample1);
-  // scheduler_add(p1->main);
-  //
-  // process_t *p2 = process_create_kernel_process(thread_sample2);
-  // scheduler_add(p2->main);
-  //
-  scheduler_reschedule();
 
+  multiboot_module_t init;
+  multiboot_map_bootinfo();
+  if (multiboot_find_module(mb_info, "init", &init)) {
+    tty_writestring("init module found! Attempt to load binary...\n");
+
+    elf_image_t img = {.bytes = (void *)(uintptr_t)(init.mod_start),
+                       .size = init.mod_end - init.mod_start};
+
+    arch_local_irq_disable();
+    process_t *p = process_spawn_from_elf(&img, NULL);
+
+    scheduler_add(p->main);
+  }
+
+  scheduler_reschedule();
   // never return;
 
-  for (;;) {
-    arch_cpu_idle(); // Halt until the next interrupt (if any)
-  }
+  arch_cpu_idle();
 }
+
