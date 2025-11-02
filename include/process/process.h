@@ -12,7 +12,7 @@ typedef int32_t pid_t;
 
 typedef struct process {
   pid_t pid;
-  mm_t *mm;
+  as_t *mm;
   int exit_code;
   thread_t  *main;
   struct process* next;

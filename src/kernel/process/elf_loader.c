@@ -41,7 +41,7 @@ static inline uintptr_t page_ceil(uintptr_t x, uintptr_t pg) {
 
 static uintptr_t choose_dyn_base(void) { return USER_ENTRY_BASE; }
 
-kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
+kerror_t elf32_load_image(const elf_image_t *img, as_t *as,
                           elf_load_result_t *out) {
   if (!img || !img->bytes || img->size < sizeof(Elf32_Ehdr) || !as || !out)
     return KERR_INVAL;
@@ -83,7 +83,7 @@ kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
 
     vmm_flags_t vmm_flags = VMM_MAP_ANON | VMM_AUTO;
     kerror_t vmm_err =
-        mm_map(as, map_begin, map_len, vmm_flags, prot | VMM_PROT_READ | VMM_PROT_USER, NULL);
+        as_map(as, map_begin, map_len, vmm_flags, prot | VMM_PROT_READ | VMM_PROT_USER, NULL);
     if (vmm_err)
       return vmm_err;
 
@@ -91,7 +91,7 @@ kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
       if (seg_off + file_sz > img->size)
         return KERR_INVAL; // corrupt file
       // copy file to memory.
-      kerror_t err = mm_memcpy(as, seg_va, ((uintptr_t)img->bytes + seg_off),
+      kerror_t err = as_memcpy(as, seg_va, ((uintptr_t)img->bytes + seg_off),
                                ph->p_filesz);
       if (err)
         return err;
@@ -101,7 +101,7 @@ kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
     if (mem_sz > file_sz) {
       uintptr_t bss_start = seg_va + file_sz;
       size_t bss_len = mem_sz - file_sz;
-      kerror_t err = mm_zero(as, bss_start, bss_len);
+      kerror_t err = as_zero(as, bss_start, bss_len);
       if (err)
         return err;
     }
@@ -118,7 +118,7 @@ kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
   return 0;
 }
 
-kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top, const char *argv0,
+kerror_t elf_setup_user_stack(as_t *as, uintptr_t stack_top, const char *argv0,
                               uintptr_t *out_user_sp) {
   if (!as || !out_user_sp)
     return KERR_INVAL;
@@ -132,7 +132,7 @@ kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top, const char *argv0,
    * argv[0]
    * argc
    * */
-  mm_map(as, stack_top - USER_STACK_SIZE, USER_STACK_SIZE,
+  as_map(as, stack_top - USER_STACK_SIZE, USER_STACK_SIZE,
          VMM_AUTO | VMM_MAP_ANON | VMM_GUARD_BELOW,
          VMM_PROT_READ | VMM_PROT_WRITE | VMM_PROT_USER, NULL);
   size_t len = strlen(argv0) + 1;
@@ -140,7 +140,7 @@ kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top, const char *argv0,
 
   sp -= len;
   uintptr_t user_str = sp;
-  err = mm_memcpy(as, user_str, (uintptr_t)argv0, len);
+  err = as_memcpy(as, user_str, (uintptr_t)argv0, len);
   if (err)
     return err;
 
@@ -149,19 +149,19 @@ kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top, const char *argv0,
 
   sp -= sizeof(uint32_t);
   uint32_t zero = 0;
-  err = mm_memcpy(as, sp, (uintptr_t)&zero, sizeof(uint32_t));
+  err = as_memcpy(as, sp, (uintptr_t)&zero, sizeof(uint32_t));
   if (err)
     return err;
 
   sp -= sizeof(uint32_t);
   uint32_t ptr0 = (uint32_t)user_str;
-  err = mm_memcpy(as, sp, (uintptr_t)&ptr0, sizeof(uint32_t));
+  err = as_memcpy(as, sp, (uintptr_t)&ptr0, sizeof(uint32_t));
   if (err)
     return err;
 
   sp -= sizeof(uint32_t);
   uint32_t argc = 1;
-  err = mm_memcpy(as, sp, (uintptr_t)&argc, sizeof(uint32_t));
+  err = as_memcpy(as, sp, (uintptr_t)&argc, sizeof(uint32_t));
   if (err)
     return err;
 

@@ -16,10 +16,10 @@ typedef struct {
   uintptr_t hi_va;
 } elf_load_result_t;
 
-kerror_t elf32_load_image(const elf_image_t *img, mm_t *as,
+kerror_t elf32_load_image(const elf_image_t *img, as_t *as,
                       elf_load_result_t *out);
 
-kerror_t elf_setup_user_stack(mm_t *as, uintptr_t stack_top,
+kerror_t elf_setup_user_stack(as_t *as, uintptr_t stack_top,
                           const char *argv0, uintptr_t *out_user_sp);
 
 #endif // ARACHNYAA_KERNEL_ELF_LOADER_H_

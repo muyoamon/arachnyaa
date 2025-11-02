@@ -117,7 +117,7 @@ void scheduler_switch(thread_t *next) {
   }
 
   // table switch 
-  mm_load_ptable(next->proc->mm);
+  as_load_ptable(next->proc->mm);
 
   arch_context_switch(old_t->ctx, current_thread->ctx);
   crit_exit();
@@ -135,7 +135,7 @@ void scheduler_reschedule(void) {
       next->state = T_RUNNING;
       // TODO: start first switch.
       tss_set_kernel_stack(current_thread->kstack.top);
-      mm_load_ptable(current_thread->proc->mm);
+      as_load_ptable(current_thread->proc->mm);
       arch_context_first_switch(current_thread->ctx);
     }
     crit_exit();

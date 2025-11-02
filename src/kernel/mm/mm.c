@@ -17,7 +17,7 @@ static inline uintptr_t round_page(uintptr_t addr, size_t pagesize) {
 
 
 
-static inline void vma_insert(mm_t *mm, vma_t *vma) {
+static inline void vma_insert(as_t *mm, vma_t *vma) {
   if (mm->vmal == NULL) {
     mm->vmal = vma;
   }
@@ -30,8 +30,8 @@ static inline void vma_insert(mm_t *mm, vma_t *vma) {
   }
 }
 
-mm_t *mm_create(void) {
-  mm_t *mm = (mm_t *)kmalloc(sizeof *mm);
+as_t *as_create(void) {
+  as_t *mm = (as_t *)kmalloc(sizeof *mm);
   memset(mm, 0, sizeof *mm);
   mm->ptable = (uintptr_t *)vmm_create_user_ptable();
   mm->refcnt = 1;
@@ -40,12 +40,12 @@ mm_t *mm_create(void) {
   return mm;
 }
 
-void mm_free(mm_t *mm) {
+void as_free(as_t *mm) {
   // TODO:
   kfree(mm);
 }
 
-kerror_t mm_map(mm_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
+kerror_t as_map(as_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
                 vmm_prot_t prot_flags, uintptr_t *io_addr) {
   kerror_t err =
       vmm_alloc(virt, len, vmm_flags, prot_flags, io_addr, mm->ptable);
@@ -65,7 +65,7 @@ kerror_t mm_map(mm_t *mm, uintptr_t virt, size_t len, vmm_flags_t vmm_flags,
   return 0;
 }
 
-kerror_t mm_memcpy(mm_t *mm, uintptr_t dest, uintptr_t src, size_t len) {
+kerror_t as_memcpy(as_t *mm, uintptr_t dest, uintptr_t src, size_t len) {
   size_t copied = 0;
   while (copied < len) {
     uintptr_t u_page = round_page(dest, PAGE_SIZE);
@@ -82,7 +82,7 @@ kerror_t mm_memcpy(mm_t *mm, uintptr_t dest, uintptr_t src, size_t len) {
   return 0;
 }
 
-kerror_t mm_zero(mm_t *mm, uintptr_t addr, size_t len) {
+kerror_t as_zero(as_t *mm, uintptr_t addr, size_t len) {
   size_t copied = 0;
   while (copied < len) {
     uintptr_t u_page = round_page(addr, PAGE_SIZE);

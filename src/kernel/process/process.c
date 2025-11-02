@@ -33,7 +33,7 @@ process_t *process_alloc(void) {
 // TODO:
 void process_free(process_t *proc) {
   if (proc->mm) {
-    mm_free(proc->mm);
+    as_free(proc->mm);
   }
   kfree(proc);
 }
@@ -49,7 +49,7 @@ process_t *process_create_kernel_process(void (*entry_point)(void *)) {
   memset(new_task, 0, sizeof(process_t));
 
   new_task->pid = next_pid++;
-  new_task->mm = mm_create();
+  new_task->mm = as_create();
 
   thread_t *main_thread = thread_alloc();
   thread_ksetup(main_thread, entry_point, NULL);
@@ -66,7 +66,7 @@ process_t *process_spawn_from_elf(const elf_image_t *img, const char *argv0) {
     return NULL;
 
   p->pid = next_pid++;
-  p->mm = mm_create();
+  p->mm = as_create();
   
   if (elf32_load_image(img, p->mm, &load)) {
     process_free(p);
