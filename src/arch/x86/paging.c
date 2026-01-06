@@ -185,7 +185,7 @@ uintptr_t vmm_create_user_ptable() {
   memset(pdpt_virt, 0, PAGE_SIZE);
 
   pdpt_virt[KERNEL_PDPT_INDEX] = pdpt[KERNEL_PDPT_INDEX] | PTE_PRESENT;
-
+  pmm_ref_count[pdpt[KERNEL_PDPT_INDEX]/PAGE_SIZE]++;
   vmm_unmap((uintptr_t)pdpt_virt);
   return pdpt_phys;
 }

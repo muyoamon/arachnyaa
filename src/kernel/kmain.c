@@ -35,27 +35,6 @@ void kprint_char(char c) { tty_putc(c); }
 extern char _kernel_start;
 extern char _kernel_end;
 
-void switch_to_user(uintptr_t user_entry, uintptr_t user_stack);
-
-void thread_sample1(void *arg) {
-  for (;;) {
-    (void)arg;
-    tty_writestring("Hello from thread 1\n");
-  }
-}
-
-void thread_sample2(void *arg) {
-  const char *msg = "Hello from user\n";
-  asm volatile("mov $1, %%eax\n"
-               "mov %0, %%ebx\n"
-               "int $0x80\n"
-               "mov $0, %%eax\n"
-               "xor %%ebx, %%ebx\n"
-               "int $0x80\n" ::"r"(msg)
-               : "eax", "ebx");
-  (void)arg;
-}
-
 // --- The C Kernel Entry Point ---
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // 1. Initialize TTY first, so we can see output!
@@ -200,13 +179,19 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   scheduler_init(20);
 
 
-  multiboot_module_t init;
-  multiboot_map_bootinfo();
-  if (multiboot_find_module(mb_info, "init", &init)) {
-    tty_writestring("init module found! Attempt to load binary...\n");
 
-    elf_image_t img = {.bytes = (void *)(uintptr_t)(init.mod_start),
-                       .size = init.mod_end - init.mod_start};
+  
+
+  multiboot_module_t initd;
+  multiboot_map_bootinfo();
+  if (multiboot_find_module(mb_info, "initd", &initd)) {
+    tty_writestring("initd module found! Attempt to load binary...\n");
+
+    // map initd image identitily
+    vmm_map(initd.mod_start, initd.mod_start, (initd.mod_end - initd.mod_start - 1) / PAGE_SIZE + 1 , PTE_PRESENT);
+
+    elf_image_t img = {.bytes = (void *)(uintptr_t)(initd.mod_start),
+                       .size = initd.mod_end - initd.mod_start};
 
     arch_local_irq_disable();
     process_t *p = process_spawn_from_elf(&img, NULL);

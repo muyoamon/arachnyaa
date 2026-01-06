@@ -30,6 +30,7 @@ typedef struct thread {
   struct process* proc;
   kstack_t kstack;
   tstate_t state;
+  int exit_code;
   int priority;
 
   struct thread *next;
@@ -66,8 +67,9 @@ void thread_usetup(thread_t *t, void (*entry)(void*), void *ustack);
 /**
  * @brief Function to be called to finish thread.
  *
+ * @param[in] exit_code Exit code.
  */
-void thread_exit(void);
+void thread_exit(int exit_code);
 
 
 

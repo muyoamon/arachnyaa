@@ -145,6 +145,9 @@ void scheduler_reschedule(void) {
   if (old_t->state == T_RUNNING) {
     old_t->state = T_READY;
     rq_push(&scheduler.rq[old_t->priority], old_t);
+  } else if (old_t->state == T_TERM) {
+    // clean up thread.
+    thread_free(old_t);
   }
 
   thread_t *next = scheduler_pick_next();

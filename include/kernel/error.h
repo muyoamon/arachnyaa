@@ -8,7 +8,8 @@ typedef enum {
   KERR_INVAL,           // invalid argument
   KERR_NOTFOUND,        // resource not found
   KERR_BUSY,            // resource busy
-  KERR_ACCESS,          // permission denied
+  KERR_ACCESS,          // access denied
+  KERR_PERM,            // invalid permission
   KERR_NOSPACE,         // out of space
   KERR_IO,              // I/O error
   KERR_FAULT,           // invalid memory access
@@ -16,6 +17,8 @@ typedef enum {
   KERR_UNSUPPORTED,     // operation not supported
   KERR_DEADLOCK,        // would cause deadlock
   KERR_TIMEOUT,         // operation timed out
+  KERR_STALE,
+  KERR_RANGE,
 } kerror_t;
 
 #define RET_IF_ERR(func, act) { \

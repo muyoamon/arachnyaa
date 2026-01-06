@@ -53,8 +53,8 @@ const char *exception_messages[] = {
 
 
 
-extern uint64_t syscall_dispatcher(uint32_t syscode, uint64_t a0,
-    uint64_t a1, uint64_t a2);
+extern uint64_t syscall_dispatcher(uint32_t syscode, uintptr_t a0,
+    uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4);
 
 
 
@@ -66,11 +66,8 @@ void isr_common_stub_handler(struct registers *regs) {
   if (regs->int_no == 0x80) {
     uint32_t syscall_num = regs->eax;
 
-    uint64_t a0 = ((uint64_t)regs->ecx << 32) | regs->ebx;
-    uint64_t a1 = ((uint64_t)regs->esi << 32) | regs->edx;
-    uint64_t a2 = ((uint64_t)regs->ebp << 32) | regs->edi;
 
-    uint64_t res = syscall_dispatcher(syscall_num, a0, a1, a2);
+    uint64_t res = syscall_dispatcher(syscall_num, regs->ebx, regs->ecx, regs->edx, regs->esi, regs->edi);
     // modified eax and edi saved in stack
     regs->eax = (uint32_t)(res & 0xFFFFFFFF);
     regs->edi = (uint32_t)(res >> 32);

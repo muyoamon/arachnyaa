@@ -1,5 +1,3 @@
-
-
 # --- Collect Sources ---
 set(KERNEL_CORE_SOURCES
     kmain.c
@@ -15,5 +13,3 @@ target_sources(arachnyaa_kernel PRIVATE
 )
 
 
-add_subdirectory(process)
-add_subdirectory(mm)

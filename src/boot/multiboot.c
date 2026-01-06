@@ -17,8 +17,8 @@ bool multiboot_find_module(multiboot_info_t *info, const char *name, multiboot_m
   for (uint32_t i = 0; i < info->mods_count; i++) {
     const char *cmd = (const char*)(mods[i].cmdline + BOOT_INFO_BASE);
     if (cmd && strcmp(cmd, name) == 0) {
-      mod->mod_start = PHYS_TO_VIRT(mods[i].mod_start);
-      mod->mod_end = PHYS_TO_VIRT(mods[i].mod_end);
+      mod->mod_start = mods[i].mod_start;
+      mod->mod_end = mods[i].mod_end;
       mod->cmdline = (uintptr_t)cmd;
       return true;
     }

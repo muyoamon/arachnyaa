@@ -1,6 +1,7 @@
 #ifndef ARACHNYAA_PROCESS_TASK_H_
 #define ARACHNYAA_PROCESS_TASK_H_
 
+#include "kernel/cap.h"
 #include "kernel/elf_loader.h"
 #include "kernel/mm.h"
 #include "process/thread.h"
@@ -9,12 +10,14 @@
 
 typedef int32_t pid_t;
 
-
 typedef struct process {
   pid_t pid;
   as_t *mm;
   int exit_code;
   thread_t  *main;
+  cap_table_t caps;
+
+
   struct process* next;
 } process_t;  
 
@@ -45,8 +48,17 @@ process_t* process_create_kernel_process(void(*entry_point)(void*));
 process_t* process_spawn_from_elf(const elf_image_t *img, const char *argv0);
 
 
+/**
+ * @brief Get list of processes.
+ *
+ * @return list of processes.
+ */
+process_t* process_get_all(void);
+
+#ifndef FOR_EACH_PROC
+#define FOR_EACH_PROC(p) for (process_t *p=process_get_all(); p!=NULL; p=p->next)
+#endif // !FOR_EACH_PROC(p)
 
 
 
-
-#endif // ARACHNYAA_PROCESS_TASK_H_
+#endif // ARACHNYAA_PROCESS_PROCESS_H_

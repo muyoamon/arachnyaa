@@ -1,14 +1,9 @@
 
 #include "process/process.h"
-#include "arch/context.h"
 #include "arch/x86/defs.h"
-#include "drivers/tty.h"
 #include "kernel/elf_loader.h"
-#include "kernel/error.h"
 #include "kernel/mm.h"
-#include "kernel/user.h"
 #include "mm/kheap.h"
-#include "mm/kstack.h"
 #include "process/thread.h"
 #include <lib/stddef.h>
 #include <lib/string.h>
@@ -16,16 +11,17 @@
 #include <stdint.h>
 
 static int32_t next_pid = 1;
-
-/*
- * @brief Initializes the multitasking system
- */
+static process_t *proc_head = NULL;
 
 process_t *process_alloc(void) {
   process_t *p = (process_t *)kmalloc(sizeof(process_t));
   if (!p)
     return NULL;
   memset(p, 0, sizeof(process_t));
+
+  p->next = proc_head;
+  proc_head = p;
+
 
   return p;
 }
@@ -36,6 +32,10 @@ void process_free(process_t *proc) {
     as_free(proc->mm);
   }
   kfree(proc);
+}
+
+process_t *process_get_all(void) {
+  return proc_head;
 }
 
 /*
