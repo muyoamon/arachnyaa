@@ -11,4 +11,10 @@ size_t strlen(const char* str);
 
 int strcmp(const char* s1, const char* s2);
 
+void *mempcpy(void *restrict dst, const void *restrict src, size_t n);
+
+char *stpcpy(char *restrict dst, const char *restrict src);
+char *strcpy(char *restrict dst, const char *restrict src);
+char *strcat(char *restrict dst, const char *restrict src);
+
 #endif // ARACHNYAA_STRING_H_

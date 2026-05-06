@@ -50,6 +50,24 @@ void kheap_init(uintptr_t heap_base);
  */
 void* kmalloc(size_t size);
 
+
+/**
+ * @brief Allocates a contiguous chunk of memory from the kernel heap as an array.
+ *
+ * @param[in] num number of elements.
+ * @param[in] size size of each element in bytes.
+ */
+void* kcalloc(size_t num, size_t size);
+
+
+
+/**
+ * @brief Allocates a chunk of memory and set to zero.
+ *
+ * @param[in] size The number of bytes to allocate.
+ */
+void* kzalloc(size_t size);
+
 /**
  * @brief Frees a previously allocated chunk of memory.
  * @param ptr Pointer to the memory chunk to free (must have been returned by kmalloc).

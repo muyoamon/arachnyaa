@@ -22,12 +22,12 @@ process_t *process_alloc(void) {
   p->next = proc_head;
   proc_head = p;
 
-
   return p;
 }
 
 // TODO:
 void process_free(process_t *proc) {
+  if (!proc) return;
   if (proc->mm) {
     as_free(proc->mm);
   }

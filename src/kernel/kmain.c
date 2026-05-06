@@ -196,6 +196,9 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     arch_local_irq_disable();
     process_t *p = process_spawn_from_elf(&img, NULL);
 
+    
+
+
     scheduler_add(p->main);
   }
 

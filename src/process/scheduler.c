@@ -133,7 +133,6 @@ void scheduler_reschedule(void) {
     if (next) {
       current_thread = next;
       next->state = T_RUNNING;
-      // TODO: start first switch.
       tss_set_kernel_stack(current_thread->kstack.top);
       as_load_ptable(current_thread->proc->mm);
       arch_context_first_switch(current_thread->ctx);

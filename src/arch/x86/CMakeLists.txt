@@ -53,6 +53,7 @@ set(ARCH_C_SOURCES
     init.c
     irq.c
     context.c
+    spinlock.c
 )
 
 

@@ -5,6 +5,9 @@ set(KERNEL_CORE_SOURCES
     time.c
     syscall.c
     irq.c
+    cap.c 
+    kobj.c 
+    revnode.c
 )
 
 

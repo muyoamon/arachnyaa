@@ -6,7 +6,8 @@
 #include "mm/kheap.h"
 #include "process/process.h"
 #include "process/scheduler.h"
-#include <string.h>
+#include "lib/string.h"
+
 static kobj_t *_cap_resolve(process_t *p, cap_handle_t handle, uint32_t rights) {
   if (!handle | !p) {
     return NULL;
@@ -31,7 +32,7 @@ int sys_write(cap_handle_t handle, const void *user_buf, size_t len) {
     case KOBJ_LOGSINK:
       {
         char *str = kmalloc(len + 1);
-        strncpy(str, user_buf, len);
+        strcpy(str, user_buf);
         str[len] = '\0';
         tty_writestring(str);
         kfree(str);

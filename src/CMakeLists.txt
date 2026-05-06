@@ -30,6 +30,7 @@ add_subdirectory(kernel)
 add_subdirectory(boot)
 add_subdirectory(process)
 add_subdirectory(mm)
+add_subdirectory(sys)
 
 add_dependencies(arachnyaa_kernel arch_asm_objects)
 

@@ -105,3 +105,27 @@ int strcmp(const char *s1, const char *s2) {
   }
 
 }
+char *stpcpy(char *restrict dst, const char *restrict src) {
+  
+  char *p;
+  
+  p = mempcpy(dst, src, strlen(src));
+  *p = '\0';
+
+  return p;
+}
+char *strcpy(char *restrict dst, const char *restrict src) {
+  
+  stpcpy(dst, src);
+  return dst;
+}
+char *strcat(char *restrict dst, const char *restrict src) {
+  
+  stpcpy(dst + strlen(dst), src);
+  return dst;
+}
+
+void *mempcpy(void *restrict dst, const void *restrict src, size_t n) {
+  memcpy(dst, src, n);
+  return dst+n;
+}

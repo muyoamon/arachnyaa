@@ -5,6 +5,7 @@
 #include "mm/vmm.h"
 #include <mm/kheap.h>
 #include <stdint.h>
+#include <lib/string.h>
 
 static kheap_t kernel_heap;
 
@@ -101,6 +102,19 @@ void *kmalloc(size_t size) {
   kernel_heap.used_blocks++;
 
   return (void *)((uintptr_t)block + sizeof(kheap_block_t));
+}
+
+void *kcalloc(size_t num, size_t size) {
+  // TODO: better approach to guarantee no integer overflow.
+  void* p = kmalloc(num*size);
+  memset(p, (uint8_t)0, num * size);
+  return p;
+}
+
+void *kzalloc(size_t size) {
+  void* p = kmalloc(size);
+  memset(p, (uint8_t)0, size);
+  return p;
 }
 
 void kfree(void *ptr) {

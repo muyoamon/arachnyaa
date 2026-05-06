@@ -117,4 +117,24 @@ const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t right
  */
 int sys_cap_close(cap_handle_t h);
 
+/**
+ * @brief Initialize cap table.
+ *
+ * @param[in] ct Pointer to cap table.
+ * @param[in] capacity capacity.
+ */
+void cap_table_init(cap_table_t *ct, uint32_t capacity);
+
+/**
+ * @brief Install root cap to process.
+ *
+ * @param[in] p Pointer to process struct.
+ * @param[in] obj Pointer to kernel obj.
+ * @param[in] rights caps rights.
+ * @return 64-bits cap handle
+ */
+cap_handle_t kcap_install_root(struct process *p, kobj_t *obj, cap_rights_t rights);
+
+
+
 #endif // ARACHNYAA_CAP_CAP_C_

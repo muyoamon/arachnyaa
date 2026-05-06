@@ -3,11 +3,12 @@
 #include "kernel/revnode.h"
 #include "kernel/error.h"
 #include "kernel/spinlock.h"
+#include "mm/kheap.h"
 #include "process/process.h"
 #include "process/scheduler.h"
 #include <stdatomic.h>
 #include <stdint.h>
-#include <string.h>
+#include "lib/string.h"
 
 static int cap_alloc_slot(cap_table_t *ct, uint32_t *out_idx) {
   spin_lock(&ct->lock);
@@ -56,6 +57,10 @@ static int cap_validate(process_t *p, cap_handle_t h, kobj_type_t want_type,
     return KERR_ACCESS;
   *out = e;
   return 0;
+}
+
+static inline cap_handle_t cap_make_handle(uint32_t idx, uint32_t gen, uint8_t type) {
+  return ((uint64_t)type << 56) | ((uint64_t)gen << 32) | idx;
 }
 
 int kcap_derive(process_t *p, cap_handle_t parent_h, uint32_t bits,
@@ -158,3 +163,55 @@ const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t right
   return entry;
 }
 
+
+void cap_table_init(cap_table_t *ct, uint32_t capacity) {
+  ct->slots = kcalloc(capacity, sizeof(cap_entry_t));
+  ct->cap_count = capacity;
+  
+  ct->free_head = 0;
+  for (uint32_t i = 0; i < capacity; i++) {
+    cap_entry_t *e = &ct->slots[i];
+    e->obj = NULL;
+    e->gen = 1;
+    uint32_t next = (i + 1 < capacity) ? (i + 1) : 0xFFFFFFFFu;
+    *(uint32_t*)&e->obj = next;
+  }
+}
+
+static uint32_t cap_next_gen(void) {
+  static atomic_uint g;
+  uint32_t v = atomic_fetch_add(&g, 1) + 1;
+  return v & 0x00FFFFFFu;
+}
+
+static revnode_t *revnode_root_new(void) {
+  revnode_t *r = kzalloc(sizeof(*r));
+  r->refcnt = 1;
+  r->parent = NULL;
+  r->first_child = NULL;
+  r->next_sibling = NULL;
+  atomic_store(&r->revoked, false);
+  return r;
+}
+
+cap_handle_t kcap_install_root(process_t *p, kobj_t *obj, cap_rights_t rights) {
+  
+  cap_table_t *ct = &p->caps;
+  uint32_t idx;
+  if (cap_alloc_slot(ct, &idx) < 0) 
+    return 0; // invalid handle
+
+  cap_entry_t *e = &ct->slots[idx];
+
+  e->obj = obj;
+  atomic_fetch_add(&obj->refcnt, 1);
+
+  e->rights = rights;
+  e->rnode = revnode_root_new();
+  e->type = obj->type;
+  e->gen = cap_next_gen();
+
+  // Encode into 64-bit handle
+  cap_handle_t h = cap_make_handle(idx, e->gen, e->type);
+  return h;
+}

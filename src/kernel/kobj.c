@@ -1,10 +1,7 @@
-
-
-
 #include "kernel/kobj.h"
 #include "mm/kheap.h"
 #include <stdatomic.h>
-#include <string.h>
+#include <lib/string.h>
 
 #define KOBJ_DEFAULT_SIZE 1024
 
@@ -33,6 +30,11 @@ kobj_t *kobj_create(void) {
   kobj_t *kobj = kobj_arr_get_next_free();
   
   return kobj;
+}
+
+void kobj_put(kobj_t *kobj) {
+  // TODO:
+  (void)kobj;
 }
 
 
