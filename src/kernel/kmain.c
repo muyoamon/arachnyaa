@@ -5,6 +5,7 @@
 #include "drivers/keyboard.h"
 #include "kernel/elf_loader.h"
 #include "kernel/mm.h"
+#include "kernel/kobj.h"
 #include "kernel/time.h"
 #include "kernel/user.h"
 #include "mm/kstack.h"
@@ -36,6 +37,8 @@ extern char _kernel_start;
 extern char _kernel_end;
 
 // --- The C Kernel Entry Point ---
+extern cap_handle_t process_install_bootstrap_log_handler(process_t *proc);
+
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // 1. Initialize TTY first, so we can see output!
   tty_initialize();
@@ -114,6 +117,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     tty_putc('\n');
     kheap_init(initial_heap_page);
     tty_writestring("Kernel heap initialized.\n");
+    kobj_init();
+    tty_writestring("Kernel object store initialized.\n");
   } else {
     tty_writestring("Failed to allocate initial page for kernel heap!\n");
   }
@@ -195,11 +200,10 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
     arch_local_irq_disable();
     process_t *p = process_spawn_from_elf(&img, NULL);
-
-    
-
-
-    scheduler_add(p->main);
+    if (p) {
+      process_install_bootstrap_log_handler(p);
+      scheduler_add(p->main);
+    }
   }
 
   scheduler_reschedule();
@@ -207,4 +211,3 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
 
   arch_cpu_idle();
 }
-

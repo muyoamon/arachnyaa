@@ -10,13 +10,16 @@ static size_t kobj_arr_size;
 
 static kobj_t *kobj_arr_get_next_free(void) {
   static size_t idx = 0;
-  for (;kobj_arr[idx].type != 0; idx++) {
-    if (idx >= kobj_arr_size) {
-      idx = 0;
-      continue;
+  size_t start = idx;
+  for (;;) {
+    if (kobj_arr[idx].type == 0) {
+      return &kobj_arr[idx];
+    }
+    idx = (idx + 1) % kobj_arr_size;
+    if (idx == start) {
+      return NULL;
     }
   }
-  return &kobj_arr[idx];
 }
 
 
@@ -28,15 +31,33 @@ void kobj_init(void) {
 
 kobj_t *kobj_create(void) {
   kobj_t *kobj = kobj_arr_get_next_free();
-  
+  if (!kobj) {
+    return NULL;
+  }
+  memset(kobj, 0, sizeof(*kobj));
+  atomic_store(&kobj->refcnt, 1);
   return kobj;
 }
 
-void kobj_put(kobj_t *kobj) {
-  // TODO:
-  (void)kobj;
+void kobj_get(kobj_t *kobj) {
+  if (!kobj) {
+    return;
+  }
+  atomic_fetch_add(&kobj->refcnt, 1);
 }
 
+void kobj_put(kobj_t *kobj) {
+  if (!kobj) {
+    return;
+  }
+  if (atomic_fetch_sub(&kobj->refcnt, 1) != 1) {
+    return;
+  }
+  if (kobj->ops && kobj->ops->release) {
+    kobj->ops->release(kobj);
+  }
+  memset(kobj, 0, sizeof(*kobj));
+}
 
 
 

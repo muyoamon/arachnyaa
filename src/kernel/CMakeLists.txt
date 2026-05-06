@@ -8,11 +8,12 @@ set(KERNEL_CORE_SOURCES
     cap.c 
     kobj.c 
     revnode.c
+    namespace.c
+    bootstrap.c
 )
 
 
 target_sources(arachnyaa_kernel PRIVATE
   ${KERNEL_CORE_SOURCES}
 )
-
 

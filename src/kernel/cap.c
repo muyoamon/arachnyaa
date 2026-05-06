@@ -10,10 +10,13 @@
 #include <stdint.h>
 #include "lib/string.h"
 
+static const uint32_t cap_invalid_index = 0xFFFFFFFFu;
+static uint32_t cap_next_gen(void);
+
 static int cap_alloc_slot(cap_table_t *ct, uint32_t *out_idx) {
   spin_lock(&ct->lock);
   uint32_t i = ct->free_head;
-  if (i == 0xFFFFFFFF) {
+  if (i == cap_invalid_index) {
     spin_unlock(&ct->lock);
     return KERR_NOMEM;
   }
@@ -28,7 +31,19 @@ static int cap_alloc_slot(cap_table_t *ct, uint32_t *out_idx) {
 static void cap_free_slot(cap_table_t *ct, uint32_t idx) {
   cap_entry_t *e = &ct->slots[idx];
   e->gen++; // invalidate stale handles
+  if (e->obj) {
+    kobj_put(e->obj);
+  }
+  if (e->rnode) {
+    revnode_put(e->rnode);
+  }
   e->obj = NULL;
+  e->rnode = NULL;
+  e->rights.bits = 0;
+  e->rights.flags = 0;
+  e->rights.off = 0;
+  e->rights.len = 0;
+  e->type = 0;
   // push to free list
   *(uint32_t *)&e->obj = ct->free_head;
   ct->free_head = idx;
@@ -93,6 +108,9 @@ int kcap_derive(process_t *p, cap_handle_t parent_h, uint32_t bits,
 
   // create child revnode
   revnode_t *child = revnode_create(p_entry->rnode);
+  if (!child) {
+    return KERR_NOMEM;
+  }
 
   // install new entry;
   uint32_t idx;
@@ -103,12 +121,13 @@ int kcap_derive(process_t *p, cap_handle_t parent_h, uint32_t bits,
   }
   cap_entry_t *e = &p->caps.slots[idx];
   e->obj = p_entry->obj;
+  kobj_get(e->obj);
   e->rights = r;
   e->rnode = child;
   e->type = p_entry->type;
-  e->gen = p_entry->gen + 1;
+  e->gen = cap_next_gen();
   
-  *out_h = ((uint64_t)e->type << 56) | ((uint64_t)e->gen << 32) | idx;
+  *out_h = cap_make_handle(idx, e->gen, e->type);
   return 0;
 }
 
@@ -129,9 +148,6 @@ int kcap_revoke(process_t *p, cap_handle_t h) {
       cap_entry_t *ce = &ct->slots[i];
       if (!ce->obj || !ce->rnode) continue;
       if (revnode_is_descendant(ce->rnode, e->rnode)) {
-        // drop reference
-        kobj_put(ce->obj);
-        revnode_put(ce->rnode);
         cap_free_slot(ct, i);
       }
     }
@@ -163,8 +179,19 @@ const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t right
   return entry;
 }
 
+static int cap_validate_mut(process_t *p, cap_handle_t h, uint32_t need_bits,
+                            uint32_t *out_idx) {
+  const cap_entry_t *entry = NULL;
+  int err = cap_validate(p, h, 0, need_bits, &entry);
+  if (err) {
+    return err;
+  }
+  *out_idx = (uint32_t)(h & 0xFFFFFFFFu);
+  return 0;
+}
 
 void cap_table_init(cap_table_t *ct, uint32_t capacity) {
+  memset(ct, 0, sizeof(*ct));
   ct->slots = kcalloc(capacity, sizeof(cap_entry_t));
   ct->cap_count = capacity;
   
@@ -173,9 +200,25 @@ void cap_table_init(cap_table_t *ct, uint32_t capacity) {
     cap_entry_t *e = &ct->slots[i];
     e->obj = NULL;
     e->gen = 1;
-    uint32_t next = (i + 1 < capacity) ? (i + 1) : 0xFFFFFFFFu;
+    uint32_t next = (i + 1 < capacity) ? (i + 1) : cap_invalid_index;
     *(uint32_t*)&e->obj = next;
   }
+}
+
+void cap_table_destroy(cap_table_t *ct) {
+  if (!ct || !ct->slots) {
+    return;
+  }
+  for (uint32_t i = 0; i < ct->cap_count; i++) {
+    cap_entry_t *e = &ct->slots[i];
+    if (!e->obj || !e->rnode) {
+      continue;
+    }
+    kobj_put(e->obj);
+    revnode_put(e->rnode);
+  }
+  kfree(ct->slots);
+  memset(ct, 0, sizeof(*ct));
 }
 
 static uint32_t cap_next_gen(void) {
@@ -186,7 +229,11 @@ static uint32_t cap_next_gen(void) {
 
 static revnode_t *revnode_root_new(void) {
   revnode_t *r = kzalloc(sizeof(*r));
+  if (!r) {
+    return NULL;
+  }
   r->refcnt = 1;
+  r->lock.locked = 0;
   r->parent = NULL;
   r->first_child = NULL;
   r->next_sibling = NULL;
@@ -202,16 +249,95 @@ cap_handle_t kcap_install_root(process_t *p, kobj_t *obj, cap_rights_t rights) {
     return 0; // invalid handle
 
   cap_entry_t *e = &ct->slots[idx];
+  revnode_t *root = revnode_root_new();
+  if (!root) {
+    spin_lock(&ct->lock);
+    *(uint32_t *)&e->obj = ct->free_head;
+    ct->free_head = idx;
+    spin_unlock(&ct->lock);
+    return 0;
+  }
 
   e->obj = obj;
-  atomic_fetch_add(&obj->refcnt, 1);
+  kobj_get(obj);
 
   e->rights = rights;
-  e->rnode = revnode_root_new();
+  e->rnode = root;
   e->type = obj->type;
   e->gen = cap_next_gen();
 
   // Encode into 64-bit handle
   cap_handle_t h = cap_make_handle(idx, e->gen, e->type);
   return h;
+}
+
+int sys_cap_close(cap_handle_t h) {
+  process_t *p = scheduler_get_current()->proc;
+  uint32_t idx = 0;
+  int err = cap_validate_mut(p, h, 0, &idx);
+  if (err) {
+    return err;
+  }
+
+  cap_table_t *ct = &p->caps;
+  spin_lock(&ct->lock);
+  cap_entry_t *e = &ct->slots[idx];
+  if (!e->obj || e->gen != (uint32_t)((h >> 32) & 0x00FFFFFFu)) {
+    spin_unlock(&ct->lock);
+    return KERR_STALE;
+  }
+  cap_free_slot(ct, idx);
+  spin_unlock(&ct->lock);
+  return 0;
+}
+
+int kcap_transfer(struct process *src, struct process *dst, cap_handle_t handle,
+                  uint32_t rights_bits) {
+  const cap_entry_t *src_entry = NULL;
+  int err = cap_validate(src, handle, 0, rights_bits, &src_entry);
+  if (err) {
+    return err;
+  }
+  revnode_t *child = revnode_create(src_entry->rnode);
+  if (!child) {
+    return KERR_NOMEM;
+  }
+
+  uint32_t idx = 0;
+  err = cap_alloc_slot(&dst->caps, &idx);
+  if (err) {
+    revnode_put(child);
+    return err;
+  }
+
+  cap_entry_t *e = &dst->caps.slots[idx];
+  e->obj = src_entry->obj;
+  kobj_get(e->obj);
+  e->rights = src_entry->rights;
+  e->rights.bits = rights_bits;
+  e->rnode = child;
+  e->gen = cap_next_gen();
+  e->type = src_entry->type;
+  return 0;
+}
+
+static process_t *process_find_by_pid(pid_t pid) {
+  FOR_EACH_PROC(proc) {
+    if (proc->pid == pid) {
+      return proc;
+    }
+  }
+  return NULL;
+}
+
+int sys_cap_transfer(pid_t dst_pid, cap_sys_arg_t *arg) {
+  if (!arg) {
+    return KERR_INVAL;
+  }
+  process_t *src = scheduler_get_current()->proc;
+  process_t *dst = process_find_by_pid(dst_pid);
+  if (!dst) {
+    return KERR_NOTFOUND;
+  }
+  return kcap_transfer(src, dst, arg->handle, arg->rights_bits);
 }

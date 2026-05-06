@@ -1,5 +1,6 @@
 #include "mm/kheap.h"
 #include <kernel/revnode.h>
+#include <lib/string.h>
 #include <stdatomic.h>
 
 
@@ -10,11 +11,14 @@
  * @return allocated next child.
  */
 static inline revnode_t *_revnode_get_next_child(revnode_t *parent) {
-  revnode_t *r = parent->first_child;
-  while (r != NULL) {
-    r = r->next_sibling;
+  revnode_t *r = kzalloc(sizeof(*r));
+  if (!r) {
+    return NULL;
   }
-  r = kzalloc(sizeof(*r));
+  spin_lock(&parent->lock);
+  r->next_sibling = parent->first_child;
+  parent->first_child = r;
+  spin_unlock(&parent->lock);
   return r;
 }
 
@@ -26,9 +30,9 @@ revnode_t *revnode_create(revnode_t *parent) {
   }
 
   r->refcnt = 1;
+  r->lock.locked = 0;
   r->parent = parent;
   r->first_child = NULL;
-  r->next_sibling = NULL;
   atomic_store(&r->revoked, false);
 
   // bump parent refcnt;
@@ -38,14 +42,35 @@ revnode_t *revnode_create(revnode_t *parent) {
 }
 
 void revnode_put(revnode_t *node) {
-  // TODO:
-  (void)node;
+  if (!node) {
+    return;
+  }
+  if (atomic_fetch_sub(&node->refcnt, 1) != 1) {
+    return;
+  }
+
+  revnode_t *parent = node->parent;
+  if (parent) {
+    spin_lock(&parent->lock);
+    revnode_t **cursor = &parent->first_child;
+    while (*cursor) {
+      if (*cursor == node) {
+        *cursor = node->next_sibling;
+        break;
+      }
+      cursor = &(*cursor)->next_sibling;
+    }
+    spin_unlock(&parent->lock);
+    revnode_put(parent);
+  }
+  kfree(node);
 }
 
 bool revnode_is_descendant(revnode_t *child, revnode_t *parent) {
-  // TODO:
-  (void)child;
-  (void)parent;
-  return true;
+  for (revnode_t *cur = child; cur != NULL; cur = cur->parent) {
+    if (cur == parent) {
+      return true;
+    }
+  }
+  return false;
 }
-

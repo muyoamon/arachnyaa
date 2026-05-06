@@ -4,6 +4,7 @@
 #include "kernel/elf_loader.h"
 #include "kernel/mm.h"
 #include "mm/kheap.h"
+#include "process/scheduler.h"
 #include "process/thread.h"
 #include <lib/stddef.h>
 #include <lib/string.h>
@@ -18,6 +19,8 @@ process_t *process_alloc(void) {
   if (!p)
     return NULL;
   memset(p, 0, sizeof(process_t));
+  cap_table_init(&p->caps, PROCESS_CAP_TABLE_CAPACITY);
+  process_namespace_init(&p->ns);
 
   p->next = proc_head;
   proc_head = p;
@@ -28,6 +31,8 @@ process_t *process_alloc(void) {
 // TODO:
 void process_free(process_t *proc) {
   if (!proc) return;
+  process_namespace_destroy(&proc->ns);
+  cap_table_destroy(&proc->caps);
   if (proc->mm) {
     as_free(proc->mm);
   }
@@ -43,10 +48,9 @@ process_t *process_get_all(void) {
  * @param entry_point Pointer to the function the task should start executing.
  */
 process_t *process_create_kernel_process(void (*entry_point)(void *)) {
-  process_t *new_task = (process_t *)kmalloc(sizeof(process_t));
+  process_t *new_task = process_alloc();
   if (!new_task)
     return NULL;
-  memset(new_task, 0, sizeof(process_t));
 
   new_task->pid = next_pid++;
   new_task->mm = as_create();
@@ -67,6 +71,13 @@ process_t *process_spawn_from_elf(const elf_image_t *img, const char *argv0) {
 
   p->pid = next_pid++;
   p->mm = as_create();
+  thread_t *current = scheduler_get_current();
+  if (current && current->proc) {
+    if (process_namespace_inherit(&p->ns, &current->proc->ns)) {
+      process_free(p);
+      return NULL;
+    }
+  }
   
   if (elf32_load_image(img, p->mm, &load)) {
     process_free(p);
@@ -86,4 +97,3 @@ process_t *process_spawn_from_elf(const elf_image_t *img, const char *argv0) {
 
   return p;
 }
-

@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <kernel/kobj.h>
+#include <kernel/protocol.h>
 
 typedef int32_t pid_t;
 
@@ -46,6 +47,9 @@ typedef struct {
   uint32_t cap_count;
   uint32_t free_head;
 } cap_table_t;
+
+#define PROCESS_CAP_TABLE_CAPACITY 64
+#define CAP_RIGHT_BIND_PROTOCOL (1u << 31)
 
 /*
  * Type Specific Rights
@@ -117,6 +121,8 @@ const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t right
  */
 int sys_cap_close(cap_handle_t h);
 
+void cap_table_destroy(cap_table_t *ct);
+
 /**
  * @brief Initialize cap table.
  *
@@ -134,6 +140,9 @@ void cap_table_init(cap_table_t *ct, uint32_t capacity);
  * @return 64-bits cap handle
  */
 cap_handle_t kcap_install_root(struct process *p, kobj_t *obj, cap_rights_t rights);
+
+int kcap_transfer(struct process *src, struct process *dst,
+                  cap_handle_t handle, uint32_t rights_bits);
 
 
 

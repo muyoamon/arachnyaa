@@ -4,6 +4,7 @@
 #include "kernel/cap.h"
 #include "kernel/elf_loader.h"
 #include "kernel/mm.h"
+#include "kernel/namespace.h"
 #include "process/thread.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,7 +17,7 @@ typedef struct process {
   int exit_code;
   thread_t  *main;
   cap_table_t caps;
-
+  process_namespace_t ns;
 
   struct process* next;
 } process_t;  
