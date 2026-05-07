@@ -107,6 +107,7 @@ void scheduler_switch(thread_t *next) {
   thread_t *old_t = current_thread;
   current_thread = next;
   next->state = T_RUNNING;
+  tss_set_kernel_stack(current_thread->kstack.top);
 
   if (old_t) {
     if (old_t->proc == next->proc) {

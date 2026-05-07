@@ -42,14 +42,23 @@ if(TARGET arachnyaa_kernel)
           $<TARGET_FILE:arachnyaa_init>
           ${ISO_DIR}/boot/initd
         DEPENDS arachnyaa_init
-        COMMENT "Copy arachnyaa_init to ${ISO_DIR}/boot/init"
+        COMMENT "Copy arachnyaa_init to ${ISO_DIR}/boot/initd"
+    )
+
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/log-client
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_log_client>
+          ${ISO_DIR}/boot/log-client
+        DEPENDS arachnyaa_log_client
+        COMMENT "Copy arachnyaa_log_client to ${ISO_DIR}/boot/log-client"
     )
 
 
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )

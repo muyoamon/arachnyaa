@@ -12,6 +12,11 @@ enum {
   KOP_CLOSE = 1u << 5,
 };
 
+enum {
+  IPC_OP_OPEN = 1,
+  IPC_OP_WRITE = 2,
+};
+
 #define PROCESS_NAMESPACE_CAPACITY 16
 #define PROCESS_PROTOCOL_NAME_MAX 16
 

@@ -10,10 +10,10 @@ set(KERNEL_CORE_SOURCES
     revnode.c
     namespace.c
     bootstrap.c
+    ipc.c
 )
 
 
 target_sources(arachnyaa_kernel PRIVATE
   ${KERNEL_CORE_SOURCES}
 )
-

@@ -33,6 +33,8 @@ typedef struct thread {
   int exit_code;
   int priority;
 
+  struct ipc_call *active_call;
+
   struct thread *next;
 } thread_t;
 

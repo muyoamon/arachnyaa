@@ -1,103 +1,66 @@
-#include "drivers/tty.h"
 #include "kernel/cap.h"
-#include "kernel/error.h"
+#include "kernel/ipc.h"
 #include "kernel/kobj.h"
-#include "kernel/protocol.h"
 #include "mm/kheap.h"
 #include "process/process.h"
-#include "lib/string.h"
 
-typedef struct {
-  uint32_t reserved;
-} log_endpoint_payload_t;
-
-static void payload_release(kobj_t *obj) {
-  if (obj->payload) {
-    kfree(obj->payload);
-    obj->payload = NULL;
+static void endpoint_release(kobj_t *obj) {
+  if (!obj || !obj->payload) {
+    return;
   }
+
+  ipc_endpoint_destroy((kobj_endpoint_t *)obj->payload);
+  kfree(obj->payload);
+  obj->payload = NULL;
 }
 
-static int log_sink_write(kobj_t *obj, const void *buf, size_t len,
-                          size_t *out_len) {
-  (void)obj;
-  tty_write((const char *)buf, len);
-  if (out_len) {
-    *out_len = len;
-  }
-  return 0;
-}
-
-static int log_handler_open(kobj_t *handler, struct process *caller,
-                            const char *path, uint32_t flags,
-                            kobj_open_result_t *out) {
-  (void)handler;
-  (void)caller;
-  (void)flags;
-  if (strcmp(path, "stdout") != 0 && strcmp(path, "console") != 0 &&
-      strcmp(path, "") != 0) {
-    return KERR_NOTFOUND;
-  }
-
-  static const kobj_ops_t log_sink_ops = {
-      .release = NULL,
-      .open = NULL,
-      .write = log_sink_write,
+static kobj_t *bootstrap_endpoint_create(process_t *owner) {
+  static const kobj_ops_t endpoint_ops = {
+      .release = endpoint_release,
   };
 
-  kobj_t *sink = kobj_create();
-  if (!sink) {
-    return KERR_NOMEM;
-  }
-
-  sink->type = KOBJ_LOGSINK;
-  sink->supported_ops = KOP_WRITE | KOP_CLOSE;
-  sink->ops = &log_sink_ops;
-  sink->payload = NULL;
-
-  out->obj = sink;
-  out->rights = KOP_WRITE | KOP_CLOSE;
-  return 0;
-}
-
-static kobj_t *bootstrap_log_handler_create(void) {
-  static const kobj_ops_t log_handler_ops = {
-      .release = payload_release,
-      .open = log_handler_open,
-      .write = NULL,
-  };
-
-  kobj_t *handler = kobj_create();
-  if (!handler) {
+  kobj_t *endpoint = kobj_create();
+  if (!endpoint) {
     return NULL;
   }
 
-  log_endpoint_payload_t *payload = kzalloc(sizeof(*payload));
+  kobj_endpoint_t *payload = kzalloc(sizeof(*payload));
   if (!payload) {
-    kobj_put(handler);
+    kobj_put(endpoint);
     return NULL;
   }
 
-  handler->type = KOBJ_ENDPOINT;
-  handler->supported_ops = KOP_OPEN;
-  handler->ops = &log_handler_ops;
-  handler->payload = payload;
-  return handler;
+  if (ipc_endpoint_init(payload, owner) != KERR_OK) {
+    kfree(payload);
+    kobj_put(endpoint);
+    return NULL;
+  }
+
+  endpoint->type = KOBJ_ENDPOINT;
+  endpoint->supported_ops = KOP_OPEN | KOP_WRITE | KOP_CLOSE;
+  endpoint->ops = &endpoint_ops;
+  endpoint->payload = payload;
+  return endpoint;
 }
 
 cap_handle_t process_install_bootstrap_log_handler(process_t *proc) {
-  kobj_t *handler = bootstrap_log_handler_create();
-  if (!handler) {
+  if (!proc) {
+    return 0;
+  }
+
+  kobj_t *endpoint = bootstrap_endpoint_create(proc);
+  if (!endpoint) {
     return 0;
   }
 
   cap_rights_t rights = {
-      .bits = CAP_RIGHT_BIND_PROTOCOL | KOP_OPEN,
+      .bits = CAP_RIGHT_BIND_PROTOCOL | R_EP_BIND | R_EP_CALL | R_EP_REPLY,
       .flags = 0,
       .off = 0,
       .len = 0,
   };
-  cap_handle_t h = kcap_install_root(proc, handler, rights);
-  kobj_put(handler);
+
+  cap_handle_t h = kcap_install_root(proc, endpoint, rights);
+  kobj_put(endpoint);
   return h;
 }

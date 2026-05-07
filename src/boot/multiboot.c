@@ -8,6 +8,18 @@
 #define PHYS_TO_VIRT(p) ((uintptr_t)(p) + (0xC0000000 - 0x100000))
 #endif
 
+static multiboot_info_t *multiboot_info;
+
+void multiboot_set_info(multiboot_info_t *info) {
+  multiboot_info = info;
+}
+
+multiboot_info_t *multiboot_get_info() {
+  return multiboot_info;
+}
+
+
+
 bool multiboot_find_module(multiboot_info_t *info, const char *name, multiboot_module_t *mod) {
   if (!info || !name || !mod) return false;
 

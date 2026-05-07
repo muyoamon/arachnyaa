@@ -44,11 +44,18 @@ typedef struct {
 } sys_args_t;
 
 typedef struct {
-  uint32_t bytes;
-  uint32_t caps;
-  uint8_t  data[256];
+  uint32_t opcode;
+  uint32_t flags;
+  uint32_t num_bytes;
+  uint32_t num_handles;
+  uint64_t object_id;
+  uint8_t data[256];
+  uint64_t handles[4];
 } sys_ipc_msg_t;
 
+typedef struct {
+  uint32_t allowed_ops;
+} sys_open_reply_t;
 
 enum {
   VM_R = 1 << 0,

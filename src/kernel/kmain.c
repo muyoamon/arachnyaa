@@ -184,7 +184,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   scheduler_init(20);
 
 
-
+  // set multiboot info so that kernel don't have to link against kmain local
+  multiboot_set_info(mb_info);
   
 
   multiboot_module_t initd;

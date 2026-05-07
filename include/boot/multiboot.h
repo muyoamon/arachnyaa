@@ -45,6 +45,10 @@ typedef struct {
 
 bool multiboot_find_module(multiboot_info_t* info, const char* name, multiboot_module_t *mod);
 
+multiboot_info_t *multiboot_get_info(void);
+
+void multiboot_set_info(multiboot_info_t*);
+
 /**
  * @brief Map bootinfo at BOOT_INFO_BASE
  *
