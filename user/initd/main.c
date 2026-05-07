@@ -31,6 +31,7 @@ enum {
   IPC_OP_OPEN = 1,
   IPC_OP_WRITE = 2,
   IPC_OP_READ = 3,
+  IPC_OP_CLOSE = 4,
 };
 
 enum {
@@ -266,8 +267,17 @@ static void write(const char* str) {
   }
 }
 
+static void handle_close(const sys_ipc_msg_t* req) {
+  // mock implementation: printing stuff
+  write("Received close request!\n");
+  (void)req;
+
+  sys_ipc_msg_t reply = {0};
+  sys_reply(&reply);
+}
+
 static void server_loop(void) {
-  write("Starting initd server!\0");
+  write("Starting initd server!\n");
   for (;;) {
     sys_ipc_msg_t req;
     int err;
@@ -287,6 +297,9 @@ static void server_loop(void) {
       break;
     case IPC_OP_READ:
       handle_read(&req);
+      break;
+    case IPC_OP_CLOSE:
+      handle_close(&req);
       break;
     default:
       handle_unknown();

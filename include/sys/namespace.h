@@ -8,4 +8,6 @@ int sys_ns_bind(const char *protocol, cap_handle_t handler, uint32_t declared_op
 
 cap_handle_t sys_open(const char *name, uint32_t flags);
 
+int sys_close(cap_handle_t handle);
+
 #endif // ARACHNYAA_SYS_NAMESPACE_H_

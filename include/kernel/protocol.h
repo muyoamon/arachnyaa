@@ -16,6 +16,7 @@ enum {
   IPC_OP_OPEN = 1,
   IPC_OP_WRITE = 2,
   IPC_OP_READ = 3,
+  IPC_OP_CLOSE = 4,
 };
 
 #define PROCESS_NAMESPACE_CAPACITY 16

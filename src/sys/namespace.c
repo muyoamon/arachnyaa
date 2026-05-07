@@ -1,5 +1,6 @@
 #include "sys/namespace.h"
 
+#include "kernel/cap.h"
 #include "kernel/error.h"
 #include "kernel/ipc.h"
 #include "kernel/kobj.h"
@@ -115,4 +116,59 @@ cap_handle_t sys_open(const char *name, uint32_t flags) {
 
   return ipc_install_remote_handle(proc, binding->handler, reply.object_id,
                                    final_ops);
+}
+
+static kobj_t *_cap_resolve(process_t *p, cap_handle_t handle,
+                            uint32_t rights) {
+  const cap_entry_t *e = cap_resolve(p, handle, rights);
+
+  if (!e) {
+    return NULL;
+  }
+
+  return e->obj;
+}
+
+int sys_close(cap_handle_t handle) {
+  process_t *proc = scheduler_get_current()->proc;
+
+  kobj_t *obj = _cap_resolve(proc, handle, KOP_CLOSE);
+
+  if (!obj) {
+    return -KERR_INVAL;
+  }
+
+  if (obj->type != KOBJ_REMOTE)
+    return -KERR_UNSUPPORTED;
+
+  kobj_remote_t *ep = obj->payload;
+
+  if (!ep || !ep->endpoint) {
+    return -KERR_INVAL;
+  }
+
+  ipc_kmsg_t req = {0};
+  ipc_kmsg_t reply = {0};
+
+  req.opcode = IPC_OP_CLOSE;
+
+  // implementation defined close action
+  kerror_t err = ipc_call(ep->endpoint, scheduler_get_current(),
+                          ep->server_object_id, &req, &reply);
+
+  if (err) {
+    return -err;
+  }
+
+  if (reply.num_bytes != 0 || reply.num_handles != 0) {
+    return -KERR_IO;
+  }
+
+  // close the cap handle
+  err = sys_cap_close(handle);
+
+  if (err)
+    return -err;
+
+  return KERR_OK;
 }

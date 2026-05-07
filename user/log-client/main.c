@@ -15,6 +15,7 @@ enum {
   SYS_RECV = 0x8,
   SYS_SPAWN = 0x9,
   SYS_READ = 0xA,
+  SYS_CLOSE = 0xB,
 };
 
 static inline uint64_t syscall1(uint32_t nr, uint32_t a0) {
@@ -80,6 +81,10 @@ static inline void dbgprint(const char* str) {
   }
 }
 
+static int sys_close(uint64_t handle) {
+  return (int)syscall2(SYS_CLOSE, (uint32_t)handle, (uint32_t)(handle >> 32));
+}
+
 void _start(void) {
   static const char path[] = "log:stdout";
   static const char msg[] = "Hello from log-client via IPC\n";
@@ -102,7 +107,14 @@ void _start(void) {
   dbgprint("[LOGCLIENT] read result:\n");
   dbgprint(buf);
 
+  dbgprint("[LOGPRINT] closing the handle\n");
+  rc = sys_close(h);
+  if (rc) {
+    dbgprint("[LOGPRINT] fail to close handle\n");
+    sys_exit(rc);
+  }
 
-  sys_cap_close(h);
+
+  // sys_cap_close(h);
   sys_exit(0);
 }

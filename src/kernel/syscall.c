@@ -45,6 +45,8 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
                           (cap_handle_t *)a2);
   case SYS_READ:
     return sys_read(syscall_cap(a0, a1), (void *)a2, a3);
+  case SYS_CLOSE:
+    return sys_close(syscall_cap(a0, a1));
   default:
     return -1;
   }

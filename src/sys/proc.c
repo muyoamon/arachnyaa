@@ -2,6 +2,7 @@
 #include "boot/multiboot.h"
 #include "kernel/elf_loader.h"
 #include "kernel/error.h"
+#include "kernel/kobj.h"
 #include "mm/vmm.h"
 #include "process/process.h"
 #include "process/scheduler.h"
@@ -40,6 +41,7 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
     if (pid != NULL) {
       *pid = child->pid;
     }
+    
     // cap initialization is not implemented in v1
     (void)cap;
     return KERR_OK;
