@@ -1,5 +1,6 @@
 #include "sys/proc.h"
 #include "boot/multiboot.h"
+#include "kernel/cap.h"
 #include "kernel/elf_loader.h"
 #include "kernel/error.h"
 #include "kernel/kobj.h"
@@ -7,6 +8,15 @@
 #include "process/process.h"
 #include "process/scheduler.h"
 
+static void _release_proc_cap(struct kobj *obj) {
+  // cap closing means process get orphaned.
+  // 
+  (void)obj;
+}
+
+static kobj_ops_t _process_ops = {
+  .release = _release_proc_cap
+};
 
 int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
                    cap_handle_t *cap) {
@@ -41,9 +51,20 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
     if (pid != NULL) {
       *pid = child->pid;
     }
-    
-    // cap initialization is not implemented in v1
-    (void)cap;
+
+    kobj_t *obj = kobj_create();
+
+    obj->type = KOBJ_TASK;
+
+    obj->ops = &_process_ops;
+    cap_rights_t rights = {0};
+    cap_handle_t h = kcap_install_root(scheduler_get_current()->proc, obj, rights);
+    kobj_put(obj);
+
+    if (cap) {
+      *cap = h;
+    }
+
     return KERR_OK;
   } else {
     // v1 only support boot module mode
