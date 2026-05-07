@@ -3,6 +3,7 @@
 #include "sys/ipc.h"
 #include "sys/namespace.h"
 #include "sys/proc.h"
+#include "sys/read.h"
 #include "sys/write.h"
 #include "uapi/syscalls.h"
 #include <stdint.h>
@@ -42,6 +43,8 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
   case SYS_SPAWN:
     return sys_proc_spawn((sys_proc_arg_t *)a0, (pid_t *)a1,
                           (cap_handle_t *)a2);
+  case SYS_READ:
+    return sys_read(syscall_cap(a0, a1), (void *)a2, a3);
   default:
     return -1;
   }

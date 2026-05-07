@@ -1,6 +1,7 @@
 #include "kernel/cap.h"
 #include "kernel/ipc.h"
 #include "kernel/kobj.h"
+#include "kernel/protocol.h"
 #include "mm/kheap.h"
 #include "process/process.h"
 
@@ -37,7 +38,7 @@ static kobj_t *bootstrap_endpoint_create(process_t *owner) {
   }
 
   endpoint->type = KOBJ_ENDPOINT;
-  endpoint->supported_ops = KOP_OPEN | KOP_WRITE | KOP_CLOSE;
+  endpoint->supported_ops = KOP_OPEN | KOP_WRITE | KOP_CLOSE | KOP_READ;
   endpoint->ops = &endpoint_ops;
   endpoint->payload = payload;
   return endpoint;

@@ -16,6 +16,7 @@ enum {
   SYS_REPLY = 0x7,
   SYS_RECV = 0x8,
   SYS_SPAWN = 0x9,
+  SYS_READ = 0xA,
 };
 
 #endif // ARACHNYAA_KERNEL_SYSCALL_H_

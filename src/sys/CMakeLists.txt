@@ -3,6 +3,7 @@ set(KERNEL_SYS_SOURCES
   write.c
   ipc.c
   proc.c
+  read.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

@@ -14,6 +14,7 @@ enum {
   SYS_REPLY = 0x7,
   SYS_RECV = 0x8,
   SYS_SPAWN = 0x9,
+  SYS_READ = 0xA,
 };
 
 static inline uint64_t syscall1(uint32_t nr, uint32_t a0) {
@@ -58,6 +59,11 @@ static inline int sys_write(uint64_t handle, const void *buf, size_t len) {
                        (uint32_t)buf, (uint32_t)len);
 }
 
+static inline int sys_read(uint64_t handle, const void *buf, size_t len) {
+  return (int)syscall4(SYS_READ, (uint32_t)handle, (uint32_t)(handle >> 32),
+      (uint32_t)buf, (uint32_t)len);
+}
+
 static inline int sys_cap_close(uint64_t handle) {
   return (int)syscall2(SYS_CAP_CLOSE, (uint32_t)handle,
                        (uint32_t)(handle >> 32));
@@ -89,6 +95,13 @@ void _start(void) {
   dbgprint("[LOGCLIENT] calling sys_write\n");
   int rc = sys_write(h, msg, sizeof(msg) - 1);
   (void)rc;
+
+  dbgprint("[LOGCLIENT] calling sys_read\n");
+  char buf[256] = {0};
+  rc = sys_read(h, buf, sizeof(buf));
+  dbgprint("[LOGCLIENT] read result:\n");
+  dbgprint(buf);
+
 
   sys_cap_close(h);
   sys_exit(0);
