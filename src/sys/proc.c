@@ -10,7 +10,10 @@
 
 static void _release_proc_cap(struct kobj *obj) {
   // cap closing means process get orphaned.
-  // 
+  // user should define how daemon process get handled at spawn time.
+  // But it should never get orphaned.
+  // Therefore, orphaned process should terminate in all cases.
+  
   (void)obj;
 }
 
@@ -55,7 +58,7 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
     kobj_t *obj = kobj_create();
 
     obj->type = KOBJ_TASK;
-
+    obj->payload = child;
     obj->ops = &_process_ops;
     cap_rights_t rights = {0};
     cap_handle_t h = kcap_install_root(scheduler_get_current()->proc, obj, rights);

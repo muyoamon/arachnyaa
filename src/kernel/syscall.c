@@ -5,6 +5,7 @@
 #include "sys/proc.h"
 #include "sys/read.h"
 #include "sys/write.h"
+#include "sys/cap.h"
 #include "uapi/syscalls.h"
 #include <stdint.h>
 

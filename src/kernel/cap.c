@@ -1,4 +1,5 @@
 #include "kernel/cap.h"
+#include "sys/cap.h"
 #include "kernel/kobj.h"
 #include "kernel/revnode.h"
 #include "kernel/error.h"

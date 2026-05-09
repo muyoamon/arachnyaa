@@ -1,6 +1,7 @@
 #include "sys/namespace.h"
 
 #include "kernel/cap.h"
+#include "sys/cap.h"
 #include "kernel/error.h"
 #include "kernel/ipc.h"
 #include "kernel/kobj.h"
