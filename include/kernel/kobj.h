@@ -29,7 +29,7 @@ typedef enum {
   KOBJ_ENDPOINT,
   KOBJ_REMOTE,
   KOBJ_ASPACE,
-  KOBJ_TASK, // process
+  KOBJ_PROC, // process
   KOBJ_THREAD,
   KOBJ_TUNNEL,
   KOBJ_FUTEX,

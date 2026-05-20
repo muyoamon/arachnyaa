@@ -322,7 +322,7 @@ int kcap_transfer(struct process *src, struct process *dst, cap_handle_t handle,
   return 0;
 }
 
-static process_t *process_find_by_pid(pid_t pid) {
+process_t *process_find_by_pid(pid_t pid) {
   FOR_EACH_PROC(proc) {
     if (proc->pid == pid) {
       return proc;
@@ -331,12 +331,19 @@ static process_t *process_find_by_pid(pid_t pid) {
   return NULL;
 }
 
-int sys_cap_transfer(pid_t dst_pid, cap_sys_arg_t *arg) {
+int sys_cap_transfer(cap_handle_t dst_cap, cap_sys_arg_t *arg) {
   if (!arg) {
     return KERR_INVAL;
   }
+  const cap_entry_t *dst_entry;
+
   process_t *src = scheduler_get_current()->proc;
-  process_t *dst = process_find_by_pid(dst_pid);
+  
+  if (cap_validate(src, dst_cap, KOBJ_PROC, R_PROC_TRANSFER, &dst_entry)) {
+    return KERR_INVAL;
+  }
+
+  process_t *dst = dst_entry->obj->payload;
   if (!dst) {
     return KERR_NOTFOUND;
   }

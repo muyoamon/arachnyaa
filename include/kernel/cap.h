@@ -74,9 +74,15 @@ typedef struct {
 #define R_AS_MAP (1u << 0)
 #define R_AS_UNMAP (1u << 1)
 
-// TASK/THREAD
-#define R_TASK_SIGNAL (1u << 0)
-#define R_TASK_DEBUG (1u << 1)
+// PROC
+#define R_PROC_SIGNAL (1u << 0)
+#define R_PROC_DEBUG (1u << 1)
+#define R_PROC_CTRL (1u << 2)       // control rights: kill, suspend, resume
+#define R_PROC_INSP (1u << 3)       // inspect rights: read status, resource usage
+#define R_PROC_WAIT (1u << 4)
+#define R_PROC_TRANSFER (1u << 5)
+
+// THREAD
 #define R_THREAD_SUSP (1u << 0)
 #define R_THREAD_RESUM (1u << 0)
 

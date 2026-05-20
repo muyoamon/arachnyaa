@@ -19,7 +19,7 @@ cap_handle_t sys_cap_derive(cap_sys_arg_t* arg);
 
 int sys_cap_revoke(cap_handle_t h);
 
-int sys_cap_transfer(pid_t dst_pid, cap_sys_arg_t* arg);
+int sys_cap_transfer(cap_handle_t dst, cap_sys_arg_t* arg);
 
 cap_handle_t sys_cap_dup(cap_handle_t h, uint32_t rights_bits);
 

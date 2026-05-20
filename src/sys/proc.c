@@ -29,7 +29,6 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
   }
 
   if (args->flags & SYS_PROG_F_BOOTMODULE) {
-
     multiboot_module_t mod;
     multiboot_info_t *boot_mb_info = multiboot_get_info();
     if (!multiboot_find_module(boot_mb_info, args->module_name, &mod)) {
@@ -57,7 +56,7 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
 
     kobj_t *obj = kobj_create();
 
-    obj->type = KOBJ_TASK;
+    obj->type = KOBJ_PROC;
     obj->payload = child;
     obj->ops = &_process_ops;
     cap_rights_t rights = {0};
