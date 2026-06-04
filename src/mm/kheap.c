@@ -105,8 +105,9 @@ void *kmalloc(size_t size) {
 }
 
 void *kcalloc(size_t num, size_t size) {
-  // TODO: better approach to guarantee no integer overflow.
-  void* p = kmalloc(num*size);
+  if (num != 0 && size > (size_t)-1 / num)
+    return NULL;
+  void* p = kmalloc(num * size);
   memset(p, (uint8_t)0, num * size);
   return p;
 }

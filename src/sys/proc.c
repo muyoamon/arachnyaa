@@ -9,12 +9,11 @@
 #include "process/scheduler.h"
 
 static void _release_proc_cap(struct kobj *obj) {
-  // cap closing means process get orphaned.
-  // user should define how daemon process get handled at spawn time.
-  // But it should never get orphaned.
-  // Therefore, orphaned process should terminate in all cases.
-  
-  (void)obj;
+  process_t *proc = (process_t *)obj->payload;
+  if (!proc) return;
+  if (proc->main)
+    scheduler_remove(proc->main->tid);
+  process_free(proc);
 }
 
 static kobj_ops_t _process_ops = {
@@ -72,6 +71,4 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
     // v1 only support boot module mode
     return KERR_UNSUPPORTED;
   }
-
-  return KERR_OK;
 }

@@ -28,13 +28,29 @@ process_t *process_alloc(void) {
   return p;
 }
 
-// TODO:
 void process_free(process_t *proc) {
   if (!proc) return;
+
+  /* Unlink from global process list */
+  if (proc_head == proc) {
+    proc_head = proc->next;
+  } else {
+    process_t *prev = proc_head;
+    while (prev && prev->next != proc)
+      prev = prev->next;
+    if (prev)
+      prev->next = proc->next;
+  }
+
+  if (proc->main) {
+    thread_free(proc->main);
+    proc->main = NULL;
+  }
   process_namespace_destroy(&proc->ns);
   cap_table_destroy(&proc->caps);
   if (proc->mm) {
     as_free(proc->mm);
+    proc->mm = NULL;
   }
   kfree(proc);
 }

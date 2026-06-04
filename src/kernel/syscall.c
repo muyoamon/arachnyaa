@@ -20,6 +20,7 @@ static inline cap_handle_t syscall_cap(native_word lo, native_word hi) {
 
 uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
                             native_word a2, native_word a3, native_word a4) {
+  (void)a4;
   switch (syscode) {
   case SYS_EXIT:
     arch_sys_exit((int)a0);
@@ -51,9 +52,4 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
   default:
     return -1;
   }
-  (void)a0;
-  (void)a1;
-  (void)a2;
-  (void)a3;
-  (void)a4;
 }

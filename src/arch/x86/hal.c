@@ -45,14 +45,20 @@ void hal_tty_putc(char c) {
         tty_row++;
     }
     if (tty_row >= VGA_HEIGHT) {
-        // Clear screen for now (TODO: implement scrolling)
-        for(int i = 0; i < VGA_WIDTH * VGA_HEIGHT; ++i) {
+        // Scroll: shift every row up by one, clear the last row
+        for (int i = 0; i < (VGA_HEIGHT - 1) * VGA_WIDTH; ++i)
+            vga_buffer[i] = vga_buffer[i + VGA_WIDTH];
+        for (int i = (VGA_HEIGHT - 1) * VGA_WIDTH; i < VGA_HEIGHT * VGA_WIDTH; ++i)
             vga_buffer[i] = vga_entry(' ', tty_color);
-        }
-        tty_row = 0;
-        tty_col = 0;
+        tty_row = VGA_HEIGHT - 1;
     }
-    // TODO: Update cursor position via ports 0x3D4/0x3D5
+
+    // Update hardware VGA cursor position
+    uint16_t pos = (uint16_t)(tty_row * VGA_WIDTH + tty_col);
+    outb(0x3D4, 14);
+    outb(0x3D5, (uint8_t)(pos >> 8));
+    outb(0x3D4, 15);
+    outb(0x3D5, (uint8_t)(pos & 0xFF));
 }
 
 // Simple print string

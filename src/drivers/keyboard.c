@@ -85,7 +85,11 @@ void keyboard_handle_scancode(uint8_t scancode) {
     case SCANCODE_CAPSLOCK:
       if (is_pressed) {
         caps_lock_on = !caps_lock_on;
-        // TODO: update keyboard LED
+        // Send LED update command to PS/2 keyboard controller
+        while (inb(0x64) & 0x02);
+        outb(0x60, 0xED);
+        while (inb(0x64) & 0x02);
+        outb(0x60, caps_lock_on ? 0x04 : 0x00);
       }
       break;
     default:

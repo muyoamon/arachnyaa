@@ -2,6 +2,7 @@
 #include "kernel/error.h"
 #include "kernel/mm.h"
 #include "mm/kheap.h"
+#include "mm/pmm.h"
 #include "mm/tracker.h"
 #include "mm/vmm.h"
 #include <lib/string.h>
@@ -41,7 +42,21 @@ as_t *as_create(void) {
 }
 
 void as_free(as_t *mm) {
-  // TODO:
+  if (!mm) return;
+
+  /* Unmap all leaf pages tracked by VMAs. Intermediate PDs/PTs are not
+   * reclaimed here — they remain a known small leak until a full page-table
+   * walker is added. */
+  vma_t *vma = mm->vmal;
+  while (vma) {
+    if (vma->len > 0)
+      vmm_unmap_user_range((uintptr_t)mm->ptable, vma->base, vma->len);
+    vma_t *next = vma->next;
+    kfree(vma);
+    vma = next;
+  }
+
+  pmm_free_frame((void *)(uintptr_t)mm->ptable);
   kfree(mm);
 }
 

@@ -166,6 +166,15 @@ cap_handle_t sys_cap_derive(cap_sys_arg_t *arg) {
   return out_h;
 }
 
+cap_handle_t sys_cap_dup(cap_handle_t h, uint32_t rights_bits) {
+  process_t *p = scheduler_get_current()->proc;
+  cap_handle_t out_h;
+  if (kcap_derive(p, h, rights_bits, 0, 0, 0, &out_h)) {
+    return 0u;
+  }
+  return out_h;
+}
+
 int sys_cap_revoke(cap_handle_t h) {
   process_t *p = scheduler_get_current()->proc;
   return kcap_revoke(p, h);

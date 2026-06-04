@@ -1,4 +1,5 @@
 #include "paging.h"
+#include "arch/cpu.h"
 #include "arch/mm.h"
 #include "drivers/tty.h"
 #include "kernel/error.h"
@@ -145,9 +146,8 @@ void page_fault_handler(uint32_t error_code) {
   // bool reserved = error_code & 0x08;
   // bool instruction = error_code & 0x10;
 
-  // TODO:
+  /* Demand-paging: satisfy not-present faults by allocating a physical frame. */
   if (!present) {
-    // allocate new page
     uintptr_t phys = (uintptr_t)pmm_alloc_frame();
     if (phys) {
       vmm_map(fault_addr, phys, 1,
@@ -161,6 +161,7 @@ void page_fault_handler(uint32_t error_code) {
   tty_writestring(" (error=0x");
   tty_write_hex(error_code);
   tty_writestring(")\n");
+  for (;;) arch_cpu_idle();
 }
 
 

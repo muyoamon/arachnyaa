@@ -123,10 +123,13 @@ kerror_t vmm_alloc_region(vmm_region_t *r, size_t size, vmm_prot_t prot_flags,
     if (!tracker_reserve(&r->free_map, size, cfg.page_size, &base)) {
       return KERR_INVAL;
     }
-    vmm_alloc(base, size, vmm_flags, prot_flags, out_addr, NULL);
   }
 
-  vmm_alloc(base, size, vmm_flags, prot_flags, out_addr, NULL);
+  kerror_t err = vmm_alloc(base, size, vmm_flags, prot_flags, NULL, NULL);
+  if (err) {
+    tracker_add(&r->free_map, base, size);
+    return err;
+  }
   *out_addr = base;
   return 0;
 }
