@@ -229,7 +229,7 @@ kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
         return KERR_NOMEM;
       }
       if (i < map_low && guard_low) {
-        _mmapf(map_low, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
+        _mmapf(i, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
       } else {
         if (prot_flags) {
           _mmapf(i, phys, 1, cfg.pte_flag);
@@ -242,7 +242,7 @@ kerror_t vmm_alloc(uintptr_t virt, size_t bytes, vmm_flags_t vmm_flags,
         crit_exit();
         return KERR_NOMEM;
       }
-      _mmapf(guard_high, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
+      _mmapf(map_high, phys, 1, cfg.pte_flag & ~PTE_PRESENT);
     }
   } else if (vmm_flags & VMM_MAP_FILE) {
     //

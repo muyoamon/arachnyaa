@@ -45,8 +45,8 @@ typedef struct {
   uint32_t p_paddr;
   uint32_t p_filesz;
   uint32_t p_memsz;
-  uint32_t p_align;
   uint32_t p_flags;
+  uint32_t p_align;
 } Elf32_Phdr;
 
 #endif // ARACHNYAA_FORMAT_ELF32_H_
