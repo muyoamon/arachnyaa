@@ -5,7 +5,6 @@
 #include "kernel/error.h"
 #include "kernel/kobj.h"
 #include "kernel/mm.h"
-#include "mm/kheap.h"
 #include "mm/vmm.h"
 #include "process/process.h"
 #include "process/scheduler.h"
@@ -74,21 +73,6 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid, cap_handle_t *cap) {
     };
 
     child = process_spawn_from_elf(&img, args->argv0);
-    if (!child) return KERR_UNKNOWN;
-
-  } else if (args->flags & SYS_PROG_F_USERMEM) {
-    if (!args->payload || args->payload_size == 0) return KERR_INVAL;
-
-    void *elf_buf = kmalloc(args->payload_size);
-    if (!elf_buf) return KERR_NOMEM;
-    memcpy(elf_buf, args->payload, args->payload_size);
-
-    elf_image_t img = {
-        .bytes = elf_buf,
-        .size = args->payload_size,
-    };
-    child = process_spawn_from_elf(&img, args->argv0);
-    kfree(elf_buf);
     if (!child) return KERR_UNKNOWN;
 
   } else if (args->flags & SYS_PROG_F_VSPACE) {

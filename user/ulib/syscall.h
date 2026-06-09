@@ -68,7 +68,6 @@ enum {
 /* ---- spawn flags ---- */
 enum {
   SYS_PROG_F_BOOTMODULE = 1 << 13,
-  SYS_PROG_F_USERMEM    = 1 << 14,
   SYS_PROG_F_VSPACE     = 1 << 15,
 };
 
@@ -123,13 +122,7 @@ typedef struct {
   uint32_t     flags;
   uint32_t     priority;
   const char  *argv0;
-  union {
-    const char *module_name;
-    struct {
-      void  *payload;
-      size_t payload_size;
-    };
-  };
+  const char  *module_name;  /* SYS_PROG_F_BOOTMODULE: name of multiboot module */
 } sys_proc_arg_t;
 
 /* ---- raw syscall trampolines ---- */

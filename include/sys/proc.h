@@ -15,21 +15,12 @@ typedef struct {
   uint32_t flags;
   uint32_t priority;
   const char *argv0;
-  /* optional, flag-defined */
-  union {
-    const char *module_name;
-    struct {
-      void *payload;
-      size_t payload_size;
-    };
-  };
+  const char *module_name;  /* SYS_PROG_F_BOOTMODULE: name of multiboot module */
 } sys_proc_arg_t;
 
 typedef enum {
   /* Boot Module flag: only module_name, flags, and argv0 matter */
   SYS_PROG_F_BOOTMODULE = 1 << 13,
-  /* User-memory ELF flag: payload points to ELF bytes in caller's address space */
-  SYS_PROG_F_USERMEM = 1 << 14,
   /* Vspace flag: vspace+entry+user_sp provided; no ELF loading */
   SYS_PROG_F_VSPACE = 1 << 15,
 } sys_proc_flag_t;
