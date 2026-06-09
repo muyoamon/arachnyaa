@@ -42,11 +42,19 @@ thread_t* thread_alloc(void) {
 }
 
 void thread_free(thread_t *t) {
-  if (t == t->proc->main) {
-    // propagate exit code;
-    t->proc->exit_code = t->exit_code;
-    // clean up process 
-    process_free(t->proc);
+  if (t->proc && t == t->proc->main) {
+    process_t *proc = t->proc;
+    proc->exit_code = t->exit_code;
+
+    thread_t *waiter = proc->waiting_thread;
+    if (waiter) {
+      proc->waiting_thread = NULL;
+      waiter->state = T_READY;
+      scheduler_add(waiter);
+    }
+
+    proc->main = NULL;  /* prevent process_free from re-entering thread_free */
+    process_free(proc);
   }
   arch_context_free(t->ctx);
   kstack_free(&t->kstack);

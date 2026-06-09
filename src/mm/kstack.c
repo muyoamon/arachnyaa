@@ -38,5 +38,6 @@ kstack_t kstack_alloc(size_t bytes) {
 }
 
 void kstack_free(kstack_t *ks) {
+  if (!ks->base) return;
   vmm_free_region(&kstack_region, ks->base, ks->size + PAGE_SIZE, 1, 0);
 }

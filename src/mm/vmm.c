@@ -137,9 +137,9 @@ kerror_t vmm_alloc_region(vmm_region_t *r, size_t size, vmm_prot_t prot_flags,
 kerror_t vmm_free_region(vmm_region_t *r, uintptr_t base, size_t size,
                          size_t guard_below, size_t guard_above) {
   uintptr_t base_to_free = base + guard_below * PAGE_SIZE;
-  size_t size_to_free = size - guard_above * PAGE_SIZE;
+  size_t size_to_free = size - (guard_below + guard_above) * PAGE_SIZE;
 
-  vmm_free(base_to_free, size_to_free);
+  vmm_free(base_to_free, size_to_free / PAGE_SIZE);
   vmm_release(r, base, size);
 
   return 0;

@@ -161,12 +161,34 @@ int sys_reply(sys_ipc_msg_t *reply) {
     return err;
   }
 
-  ipc_call_t *call = scheduler_get_current()->active_call;
+  thread_t *server_thread = scheduler_get_current();
+  ipc_call_t *call = server_thread->active_call;
   if (!call) {
     return KERR_INVAL;
   }
 
   ipc_kmsg_t kmsg = {0};
   kmsg_cpy(reply, &kmsg);
+
+  /* Transfer capability handles from server's cap table to client's. */
+  if (kmsg.num_handles > 0 && call->client_proc) {
+    process_t *server = server_thread->proc;
+    process_t *client = call->client_proc;
+    for (uint32_t i = 0; i < kmsg.num_handles; i++) {
+      if (kmsg.handles[i] == 0) continue;
+      const cap_entry_t *e = cap_resolve(server, kmsg.handles[i], 0);
+      if (!e) {
+        kmsg.handles[i] = 0;
+        continue;
+      }
+      cap_handle_t new_h = 0;
+      if (kcap_transfer(server, client, kmsg.handles[i], e->rights.bits, &new_h) != 0) {
+        kmsg.handles[i] = 0;
+      } else {
+        kmsg.handles[i] = new_h;
+      }
+    }
+  }
+
   return ipc_reply_finish(call, &kmsg);
 }

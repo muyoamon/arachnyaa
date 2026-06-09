@@ -41,6 +41,12 @@ as_t *as_create(void) {
   return mm;
 }
 
+void as_put(as_t *mm) {
+  if (!mm) return;
+  if (--mm->refcnt == 0)
+    as_free(mm);
+}
+
 void as_free(as_t *mm) {
   if (!mm) return;
 

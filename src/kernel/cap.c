@@ -302,7 +302,7 @@ int sys_cap_close(cap_handle_t h) {
 }
 
 int kcap_transfer(struct process *src, struct process *dst, cap_handle_t handle,
-                  uint32_t rights_bits) {
+                  uint32_t rights_bits, cap_handle_t *out_h) {
   const cap_entry_t *src_entry = NULL;
   int err = cap_validate(src, handle, 0, rights_bits, &src_entry);
   if (err) {
@@ -328,6 +328,9 @@ int kcap_transfer(struct process *src, struct process *dst, cap_handle_t handle,
   e->rnode = child;
   e->gen = cap_next_gen();
   e->type = src_entry->type;
+  if (out_h) {
+    *out_h = cap_make_handle(idx, e->gen, e->type);
+  }
   return 0;
 }
 
@@ -356,5 +359,14 @@ int sys_cap_transfer(cap_handle_t dst_cap, cap_sys_arg_t *arg) {
   if (!dst) {
     return KERR_NOTFOUND;
   }
-  return kcap_transfer(src, dst, arg->handle, arg->rights_bits);
+  return kcap_transfer(src, dst, arg->handle, arg->rights_bits, NULL);
+}
+
+cap_handle_t sys_cap_restrict(cap_handle_t h, uint32_t new_bits) {
+  process_t *p = scheduler_get_current()->proc;
+  cap_handle_t out_h;
+  if (kcap_derive(p, h, new_bits, 0, 0, 0, &out_h)) {
+    return 0u;
+  }
+  return out_h;
 }

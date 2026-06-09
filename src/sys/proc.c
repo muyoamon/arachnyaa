@@ -4,9 +4,11 @@
 #include "kernel/elf_loader.h"
 #include "kernel/error.h"
 #include "kernel/kobj.h"
+#include "mm/kheap.h"
 #include "mm/vmm.h"
 #include "process/process.h"
 #include "process/scheduler.h"
+#include <lib/string.h>
 
 static void _release_proc_cap(struct kobj *obj) {
   process_t *proc = (process_t *)obj->payload;
@@ -20,12 +22,40 @@ static kobj_ops_t _process_ops = {
   .release = _release_proc_cap
 };
 
-int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
-                   cap_handle_t *cap) {
-  // v1 only support boot module flag for now.
+static cap_handle_t _install_proc_cap(process_t *parent, process_t *child) {
+  kobj_t *obj = kobj_create();
+  if (!obj) return 0;
+  obj->type = KOBJ_PROC;
+  obj->payload = child;
+  obj->ops = &_process_ops;
+  cap_rights_t rights = {
+    .bits = R_PROC_SIGNAL | R_PROC_CTRL | R_PROC_INSP | R_PROC_WAIT | R_PROC_TRANSFER,
+  };
+  cap_handle_t h = kcap_install_root(parent, obj, rights);
+  kobj_put(obj);
+  return h;
+}
+
+static void _transfer_caps_to_child(process_t *parent, process_t *child,
+                                     const sys_proc_arg_t *args) {
+  if (args->endpoint != 0) {
+    const cap_entry_t *e = cap_resolve(parent, args->endpoint, 0);
+    if (e) kcap_transfer(parent, child, args->endpoint, e->rights.bits, NULL);
+  }
+  for (int i = 0; i < 3; i++) {
+    if (args->stdio[i] == 0) continue;
+    const cap_entry_t *e = cap_resolve(parent, args->stdio[i], 0);
+    if (e) kcap_transfer(parent, child, args->stdio[i], e->rights.bits, NULL);
+  }
+}
+
+int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid, cap_handle_t *cap) {
   if (!args) {
     return KERR_INVAL;
   }
+
+  process_t *parent = scheduler_get_current()->proc;
+  process_t *child = NULL;
 
   if (args->flags & SYS_PROG_F_BOOTMODULE) {
     multiboot_module_t mod;
@@ -42,33 +72,55 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid,
         .size = mod.mod_end - mod.mod_start,
     };
 
-    process_t *child = process_spawn_from_elf(&img, args->argv0);
+    child = process_spawn_from_elf(&img, args->argv0);
+    if (!child) return KERR_UNKNOWN;
 
-    if (!child) {
-      return KERR_UNKNOWN;
-    }
+  } else if (args->flags & SYS_PROG_F_USERMEM) {
+    if (!args->payload || args->payload_size == 0) return KERR_INVAL;
 
-    scheduler_add(child->main);
-    if (pid != NULL) {
-      *pid = child->pid;
-    }
+    void *elf_buf = kmalloc(args->payload_size);
+    if (!elf_buf) return KERR_NOMEM;
+    memcpy(elf_buf, args->payload, args->payload_size);
 
-    kobj_t *obj = kobj_create();
+    elf_image_t img = {
+        .bytes = elf_buf,
+        .size = args->payload_size,
+    };
+    child = process_spawn_from_elf(&img, args->argv0);
+    kfree(elf_buf);
+    if (!child) return KERR_UNKNOWN;
 
-    obj->type = KOBJ_PROC;
-    obj->payload = child;
-    obj->ops = &_process_ops;
-    cap_rights_t rights = {0};
-    cap_handle_t h = kcap_install_root(scheduler_get_current()->proc, obj, rights);
-    kobj_put(obj);
-
-    if (cap) {
-      *cap = h;
-    }
-
-    return KERR_OK;
   } else {
-    // v1 only support boot module mode
     return KERR_UNSUPPORTED;
   }
+
+  _transfer_caps_to_child(parent, child, args);
+  scheduler_add(child->main);
+
+  if (pid) *pid = child->pid;
+
+  cap_handle_t h = _install_proc_cap(parent, child);
+  if (cap) *cap = h;
+
+  return KERR_OK;
+}
+
+int sys_proc_wait(cap_handle_t proc_cap) {
+  process_t *caller = scheduler_get_current()->proc;
+  const cap_entry_t *e = cap_resolve(caller, proc_cap, R_PROC_WAIT);
+  if (!e) return -KERR_INVAL;
+  if (e->obj->type != KOBJ_PROC) return -KERR_PERM;
+
+  process_t *target = (process_t *)e->obj->payload;
+  if (!target) return -KERR_NOTFOUND;
+
+  /* Process already exited (no main thread). */
+  if (!target->main) return target->exit_code;
+
+  thread_t *current = scheduler_get_current();
+  target->waiting_thread = current;
+  current->state = T_BLOCKED;
+  scheduler_reschedule();
+
+  return target->exit_code;
 }

@@ -15,11 +15,13 @@ typedef struct process {
   pid_t pid;
   as_t *mm;
   int exit_code;
-  thread_t  *main;
+  thread_t *main;
   cap_table_t caps;
   process_namespace_t ns;
 
-  struct process* next;
+  struct thread *waiting_thread;
+
+  struct process *next;
 } process_t;  
 
 

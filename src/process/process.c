@@ -43,13 +43,14 @@ void process_free(process_t *proc) {
   }
 
   if (proc->main) {
-    thread_free(proc->main);
-    proc->main = NULL;
+    thread_t *t = proc->main;
+    proc->main = NULL;  /* break thread_free → process_free recursion */
+    thread_free(t);
   }
   process_namespace_destroy(&proc->ns);
   cap_table_destroy(&proc->caps);
   if (proc->mm) {
-    as_free(proc->mm);
+    as_put(proc->mm);
     proc->mm = NULL;
   }
   kfree(proc);

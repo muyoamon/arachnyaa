@@ -29,12 +29,13 @@ typedef enum {
   KOBJ_ENDPOINT,
   KOBJ_REMOTE,
   KOBJ_ASPACE,
-  KOBJ_PROC, // process
+  KOBJ_PROC,
   KOBJ_THREAD,
   KOBJ_TUNNEL,
   KOBJ_FUTEX,
   KOBJ_DEVICE,
   KOBJ_IOSTREAM,
+  KOBJ_IRQ,
 } kobj_type_t;
 
 /*

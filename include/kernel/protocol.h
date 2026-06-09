@@ -10,6 +10,7 @@ enum {
   KOP_WRITE = 1u << 3,
   KOP_MAP = 1u << 4,
   KOP_CLOSE = 1u << 5,
+  KOP_EXEC = 1u << 6,
 };
 
 enum {
@@ -17,6 +18,7 @@ enum {
   IPC_OP_WRITE = 2,
   IPC_OP_READ = 3,
   IPC_OP_CLOSE = 4,
+  IPC_OP_EXEC = 5,
 };
 
 #define PROCESS_NAMESPACE_CAPACITY 16

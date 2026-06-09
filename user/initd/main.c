@@ -65,6 +65,7 @@ typedef struct {
   uintptr_t user_sp;
   cap_handle_t handle_table;
   cap_handle_t endpoint;
+  cap_handle_t stdio[3];
   uint32_t flags;
   uint32_t priority;
   const char *argv0;

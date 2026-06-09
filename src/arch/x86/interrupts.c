@@ -7,6 +7,7 @@
 #include "paging.h"
 #include "kernel/time.h"
 #include "drivers/tty.h"
+#include "sys/irq.h"
 #include <drivers/keyboard.h>
 #include <stdint.h>
 #include "register.h"
@@ -75,18 +76,25 @@ void isr_common_stub_handler(struct registers *regs) {
   }
 
   if (regs->int_no >= 32 && regs->int_no <= 47) {
+    uint32_t irq_num = regs->int_no - 32;
     switch (regs->int_no) {
-    case 32: {
+    case 32:
       timer_isr_handler();
       break;
-    }
     case 33: {
       uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-      keyboard_handle_scancode(scancode);
+      /* If IRQ 1 is claimed by user-space, wake the waiter; otherwise
+         fall back to the kernel keyboard driver for debug TTY output. */
+      irq_cap_notify(1);
+      if (scancode) keyboard_handle_scancode(scancode);
+      break;
     }
+    default:
+      irq_cap_notify(irq_num);
+      break;
     }
 
-    pic_send_eoi(regs->int_no - 32);
+    pic_send_eoi(irq_num);
     irq_exit_tail(regs);
     return;
   }

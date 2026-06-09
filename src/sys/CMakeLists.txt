@@ -4,6 +4,10 @@ set(KERNEL_SYS_SOURCES
   ipc.c
   proc.c
   read.c
+  ep.c
+  irq.c
+  device.c
+  vspace.c
 )
 
 target_sources(arachnyaa_kernel PRIVATE

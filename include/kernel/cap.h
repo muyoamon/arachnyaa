@@ -95,7 +95,10 @@ typedef struct {
 #define R_IO_READ (1u << 0)
 #define R_IO_WRITE (1u << 1)
 
-const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t rights); 
+// IRQ
+#define R_IRQ_WAIT (1u << 0)
+
+const cap_entry_t *cap_resolve(struct process *p, cap_handle_t h, uint32_t rights);
 
 void cap_table_destroy(cap_table_t *ct);
 
@@ -117,8 +120,12 @@ void cap_table_init(cap_table_t *ct, uint32_t capacity);
  */
 cap_handle_t kcap_install_root(struct process *p, kobj_t *obj, cap_rights_t rights);
 
+int kcap_derive(struct process *p, cap_handle_t parent_h, uint32_t bits,
+                uint64_t off, uint64_t len, uint32_t flags, cap_handle_t *out_h);
+
 int kcap_transfer(struct process *src, struct process *dst,
-                  cap_handle_t handle, uint32_t rights_bits);
+                  cap_handle_t handle, uint32_t rights_bits,
+                  cap_handle_t *out_h);
 
 
 

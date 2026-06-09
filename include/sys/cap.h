@@ -23,6 +23,8 @@ int sys_cap_transfer(cap_handle_t dst, cap_sys_arg_t* arg);
 
 cap_handle_t sys_cap_dup(cap_handle_t h, uint32_t rights_bits);
 
+cap_handle_t sys_cap_restrict(cap_handle_t h, uint32_t new_bits);
+
 /**
  * @brief Close (drop one refcnt);
  *

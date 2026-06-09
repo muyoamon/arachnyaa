@@ -38,6 +38,10 @@ as_t *as_create(void);
  */
 void as_free(as_t *mm);
 
+static inline void as_get(as_t *mm) { if (mm) mm->refcnt++; }
+
+void as_put(as_t *mm);
+
 /**
  * @brief Generic-purpose memory mapping function.
  *
