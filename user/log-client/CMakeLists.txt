@@ -12,7 +12,9 @@ target_compile_options(arachnyaa_log_client PRIVATE
   -g
 )
 
-if (TARGET arachnyaa_log_client) 
+target_link_libraries(arachnyaa_log_client PRIVATE ulib)
+
+if (TARGET arachnyaa_log_client)
   set(ISO_DIR ${CMAKE_BINARY_DIR}/iso)
   set(BINARY ${CMAKE_BINARY_DIR}/user/arachnyaa_log_client)
 

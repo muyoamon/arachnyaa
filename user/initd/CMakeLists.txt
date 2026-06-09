@@ -12,7 +12,9 @@ target_compile_options(arachnyaa_init PRIVATE
   -g
 )
 
-if (TARGET arachyaa_init) 
+target_link_libraries(arachnyaa_init PRIVATE ulib)
+
+if (TARGET arachyaa_init)
   set(ISO_DIR ${CMAKE_BINARY_DIR}/iso)
   set(BINARY ${CMAKE_BINARY_DIR}/user/arachnyaa_init)
 
