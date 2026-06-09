@@ -84,12 +84,19 @@ cap_handle_t sys_open(const char *name, uint32_t flags) {
   req.opcode = IPC_OP_OPEN;
   req.flags = flags;
 
+  size_t proto_len = strlen(protocol);
   size_t path_len = strlen(path);
-  if (path_len > IPC_INLINE_BYTES) {
-    path_len = IPC_INLINE_BYTES;
+  size_t full_len = proto_len + 1 + path_len;  /* "proto:path" */
+  if (full_len > IPC_INLINE_BYTES)
+    full_len = IPC_INLINE_BYTES;
+  req.num_bytes = (uint32_t)full_len;
+  size_t n = proto_len < full_len ? proto_len : full_len;
+  memcpy(req.data, protocol, n);
+  if (n < full_len) {
+    req.data[n++] = ':';
+    if (n < full_len)
+      memcpy(req.data + n, path, full_len - n);
   }
-  req.num_bytes = (uint32_t)path_len;
-  memcpy(req.data, path, path_len);
 
   err = ipc_call(binding->handler, scheduler_get_current(), 0, &req, &reply);
 

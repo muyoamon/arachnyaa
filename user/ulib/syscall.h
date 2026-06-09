@@ -71,6 +71,13 @@ enum {
   SYS_PAGE_F_FIXED = 1u << 0,
 };
 
+/* ---- memory protection flags (for sys_vspace_map prot_flags) ---- */
+enum {
+  VMM_PROT_READ  = 1u << 0,
+  VMM_PROT_WRITE = 1u << 1,
+  VMM_PROT_EXEC  = 1u << 2,
+};
+
 /* ---- IPC message ---- */
 typedef struct {
   uint32_t opcode;
