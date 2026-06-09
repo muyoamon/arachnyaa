@@ -40,7 +40,7 @@ bool multiboot_find_module(multiboot_info_t *info, const char *name, multiboot_m
 
 
 void multiboot_map_bootinfo(void) {
-  vmm_map(BOOT_INFO_BASE, 0x0, BOOT_INFO_SIZE/PAGE_SIZE, PTE_PRESENT);
+  vmm_map(BOOT_INFO_BASE, 0x0, BOOT_INFO_SIZE/PAGE_SIZE, PTE_PRESENT | PTE_WRITABLE);
 }
 
 void multiboot_unmap_bootinfo(void) {

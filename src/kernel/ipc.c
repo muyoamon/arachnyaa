@@ -127,6 +127,28 @@ kerror_t ipc_recv_next(struct kobj *endpoint, struct thread *server,
 
   spin_lock(&ep->lock);
 
+  if (ep->pending_notify_mask) {
+    uint32_t bit = ep->pending_notify_mask & (-(int32_t)ep->pending_notify_mask);
+    uint32_t irq_num = (uint32_t)__builtin_ctz(ep->pending_notify_mask);
+    ep->pending_notify_mask &= ~bit;
+    uint8_t data = ep->notify_data[irq_num];
+    spin_unlock(&ep->lock);
+
+    ipc_call_t *ncall = ipc_call_create();
+    if (!ncall) return KERR_NOMEM;
+    ncall->is_notification = true;
+    ncall->state = IPC_CALL_ACTIVE;
+    ncall->server_thread = server;
+    ncall->server_proc = server->proc;
+    ncall->request.opcode = IPC_OP_NOTIFY;
+    ncall->request.object_id = irq_num;
+    ncall->request.data[0] = data;
+    ncall->request.num_bytes = 1;
+    server->active_call = ncall;
+    *out_call = ncall;
+    return KERR_OK;
+  }
+
   ipc_call_t *call = ep->queue_head;
   if (!call) {
     ep->waiting_server = server;
@@ -168,6 +190,11 @@ kerror_t ipc_reply_finish(ipc_call_t *call, const ipc_kmsg_t *reply) {
   if (call->client_thread && call->client_thread->state == T_BLOCKED) {
     call->client_thread->state = T_READY;
     scheduler_add(call->client_thread);
+  } else if (!call->client_thread) {
+    /* Notification call: no client, free immediately after clearing server state */
+    if (call->server_thread) call->server_thread->active_call = NULL;
+    ipc_call_destroy(call);
+    return KERR_OK;
   }
 
   if (call->server_thread) {

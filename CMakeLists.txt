@@ -54,11 +54,19 @@ if(TARGET arachnyaa_kernel)
         COMMENT "Copy arachnyaa_log_client to ${ISO_DIR}/boot/log-client"
     )
 
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/ttyd
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_ttyd>
+          ${ISO_DIR}/boot/ttyd
+        DEPENDS arachnyaa_ttyd
+        COMMENT "Copy arachnyaa_ttyd to ${ISO_DIR}/boot/ttyd"
+    )
 
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )

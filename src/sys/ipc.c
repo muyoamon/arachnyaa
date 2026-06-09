@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <sys/ipc.h>
 
+#define UINT32_MAX_VAL 0xFFFFFFFFu
+
 static int ipc_msg_validate(const sys_ipc_msg_t *msg) {
   if (!msg) {
     return KERR_INVAL;
@@ -190,5 +192,49 @@ int sys_reply(sys_ipc_msg_t *reply) {
     }
   }
 
+  return ipc_reply_finish(call, &kmsg);
+}
+
+uint32_t sys_defer_call(void) {
+  thread_t *t = scheduler_get_current();
+  if (!t->active_call) return UINT32_MAX_VAL;
+  process_t *proc = t->proc;
+  for (int i = 0; i < 4; i++) {
+    if (!proc->saved_calls[i]) {
+      ipc_call_t *call = t->active_call;
+      t->active_call = NULL;
+      call->server_thread = NULL;  /* prevent reply from touching thread->active_call */
+      proc->saved_calls[i] = call;
+      return (uint32_t)i;
+    }
+  }
+  return UINT32_MAX_VAL;
+}
+
+int sys_reply_to(uint32_t token, const sys_ipc_msg_t *msg) {
+  if (token >= 4 || !msg) return -KERR_INVAL;
+  int err = ipc_msg_validate(msg);
+  if (err) return err;
+  process_t *proc = scheduler_get_current()->proc;
+  ipc_call_t *call = proc->saved_calls[token];
+  if (!call) return -KERR_INVAL;
+  proc->saved_calls[token] = NULL;
+
+  ipc_kmsg_t kmsg = {0};
+  kmsg_cpy(msg, &kmsg);
+
+  if (kmsg.num_handles > 0 && call->client_proc) {
+    process_t *client = call->client_proc;
+    for (uint32_t i = 0; i < kmsg.num_handles; i++) {
+      if (!kmsg.handles[i]) continue;
+      const cap_entry_t *e = cap_resolve(proc, kmsg.handles[i], 0);
+      if (!e) { kmsg.handles[i] = 0; continue; }
+      cap_handle_t new_h = 0;
+      if (kcap_transfer(proc, client, kmsg.handles[i], e->rights.bits, &new_h) != 0)
+        kmsg.handles[i] = 0;
+      else
+        kmsg.handles[i] = new_h;
+    }
+  }
   return ipc_reply_finish(call, &kmsg);
 }

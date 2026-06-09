@@ -370,3 +370,11 @@ cap_handle_t sys_cap_restrict(cap_handle_t h, uint32_t new_bits) {
   }
   return out_h;
 }
+
+cap_handle_t sys_bootstrap_cap(uint32_t slot) {
+  process_t *proc = scheduler_get_current()->proc;
+  if (slot >= proc->caps.cap_count) return 0;
+  cap_entry_t *e = &proc->caps.slots[slot];
+  if (!e->obj) return 0;
+  return ((uint64_t)e->type << 56) | ((uint64_t)e->gen << 32) | (uint64_t)slot;
+}

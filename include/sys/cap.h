@@ -33,6 +33,14 @@ cap_handle_t sys_cap_restrict(cap_handle_t h, uint32_t new_bits);
  */
 int sys_cap_close(cap_handle_t h);
 
+/**
+ * @brief Return a handle to the capability at the given slot in the calling
+ *        process's cap table (installed by the kernel before first reschedule).
+ *
+ * @param slot  Cap table slot index (0 = server endpoint, 1 = boot manifest, …)
+ * @return cap handle, or 0 if slot is empty or out of range.
+ */
+cap_handle_t sys_bootstrap_cap(uint32_t slot);
 
 
 #endif // ARACHNYAA_SYS_CAP_H_

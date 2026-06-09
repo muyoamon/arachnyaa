@@ -83,10 +83,9 @@ void isr_common_stub_handler(struct registers *regs) {
       break;
     case 33: {
       uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-      /* If IRQ 1 is claimed by user-space, wake the waiter; otherwise
-         fall back to the kernel keyboard driver for debug TTY output. */
-      irq_cap_notify(1);
-      if (scancode) keyboard_handle_scancode(scancode);
+      irq_cap_notify_data(1, scancode);
+      if (!irq_has_notify_ep(1) && scancode)
+        keyboard_handle_scancode(scancode);
       break;
     }
     default:

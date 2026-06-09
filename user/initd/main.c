@@ -8,14 +8,11 @@
  *   index 0: BOOTSTRAP_LOG_HANDLER — endpoint with bind+call+reply rights
  *   index 1: BOOT_MANIFEST_CAP     — VMOBJ covering physical [0, 1MB)
  *
- * Cap handle encoding: bits[56:63]=type, bits[32:55]=gen(1), bits[0:31]=index
+ * Use sys_bootstrap_cap(slot) to retrieve handles — it reads the live generation
+ * counter from the cap table rather than relying on hardcoded generation values.
  */
 #define BOOTSTRAP_LOG_HANDLER \
   (((uint64_t)KOBJ_ENDPOINT << 56) | ((uint64_t)1 << 32) | 0u)
-
-#define KOBJ_VMOBJ 1
-#define BOOT_MANIFEST_CAP \
-  (((uint64_t)KOBJ_VMOBJ << 56) | ((uint64_t)1 << 32) | 1u)
 
 /* Virtual address where initd maps the 1MB boot info region. */
 #define BOOTINFO_VADDR  0x10000000u
@@ -330,15 +327,44 @@ static void server_loop(void) {
 void _start(void) {
   /* Map boot manifest VMOBJ (cap index 1) into our address space. */
   cap_handle_t self_vspace = sys_vspace_self();
-  if (self_vspace != 0) {
+  cap_handle_t boot_manifest_cap = sys_bootstrap_cap(1);
+  if (self_vspace != 0 && boot_manifest_cap != 0) {
     sys_vspace_map_args_t map_args = {
       .vspace_cap = self_vspace,
       .virt_addr  = BOOTINFO_VADDR,
-      .page_cap   = BOOT_MANIFEST_CAP,
+      .page_cap   = boot_manifest_cap,
       .prot_flags = VMM_PROT_READ,
     };
     sys_vspace_map(&map_args);
     parse_boot_modules();
+  }
+
+  /* Bind tty: protocol and spawn ttyd before log setup. */
+  cap_handle_t tty_ep = sys_ep_create();
+  sys_ns_bind("tty", tty_ep, KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+
+  {
+    sys_proc_arg_t tty_arg;
+    memset(&tty_arg, 0, sizeof(tty_arg));
+    tty_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    tty_arg.module_name = "ttyd";
+    tty_arg.argv0       = "ttyd";
+    tty_arg.endpoint    = tty_ep;
+    sys_spawn(&tty_arg, NULL, NULL);
+  }
+
+  /* Obtain a focus handle from ttyd (so initd can switch vterms later). */
+  {
+    sys_ipc_msg_t focus_req, focus_rep;
+    memset(&focus_req, 0, sizeof(focus_req));
+    memset(&focus_rep, 0, sizeof(focus_rep));
+    focus_req.opcode    = IPC_OP_OPEN;
+    static const char focus_path[] = "tty:focus";
+    focus_req.num_bytes = (uint32_t)(sizeof(focus_path) - 1);
+    memcpy(focus_req.data, focus_path, focus_req.num_bytes);
+    sys_call(tty_ep, &focus_req, &focus_rep);
+    cap_handle_t focus_handle = focus_rep.handles[0];
+    (void)focus_handle; /* stored for future focus switching */
   }
 
   bind_log_protocol();

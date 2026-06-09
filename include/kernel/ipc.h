@@ -6,6 +6,7 @@
 #include "kernel/protocol.h"
 #include "kernel/spinlock.h"
 #include <lib/stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 struct process;
@@ -53,6 +54,8 @@ typedef struct ipc_call {
 
   struct kobj *endpoint;
 
+  bool is_notification;  /* true = kernel-injected, no client to reply to */
+
   /*
    * For remote-object operations, the kernel includes the server-owned object
    * id so the server can identify which object the operation targets. For
@@ -78,6 +81,9 @@ typedef struct {
   ipc_call_t *queue_tail;
 
   struct thread *waiting_server;
+
+  uint32_t pending_notify_mask;   /* bitmask: bit N set = IRQ N has a pending notification */
+  uint8_t  notify_data[16];       /* one data byte per IRQ (e.g., scancode for IRQ 1) */
 } kobj_endpoint_t;
 
 /*

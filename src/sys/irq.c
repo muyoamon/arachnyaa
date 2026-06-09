@@ -1,6 +1,7 @@
 #include "sys/irq.h"
 #include "kernel/cap.h"
 #include "kernel/error.h"
+#include "kernel/ipc.h"
 #include "kernel/kobj.h"
 #include "kernel/spinlock.h"
 #include "mm/kheap.h"
@@ -12,6 +13,7 @@ typedef struct {
   uint8_t irq_num;
   spinlock_t lock;
   thread_t *waiting_thread;
+  struct kobj *notify_ep;  /* endpoint to post notifications to */
 } kobj_irq_t;
 
 /* One slot per hardware IRQ line (IRQs 0–15 mapped to interrupts 32–47). */
@@ -21,6 +23,7 @@ static void irq_kobj_release(kobj_t *obj) {
   if (!obj || !obj->payload) return;
   kobj_irq_t *slot = (kobj_irq_t *)obj->payload;
   if (slot->irq_num < 16) irq_slots[slot->irq_num] = NULL;
+  if (slot->notify_ep) kobj_put(slot->notify_ep);
   kfree(slot);
   obj->payload = NULL;
 }
@@ -76,7 +79,7 @@ int sys_irq_wait(cap_handle_t irq_cap) {
   return KERR_OK;
 }
 
-void irq_cap_notify(uint32_t irq_num) {
+void irq_cap_notify_data(uint32_t irq_num, uint8_t data) {
   if (irq_num >= 16) return;
   kobj_irq_t *slot = irq_slots[irq_num];
   if (!slot) return;
@@ -84,10 +87,44 @@ void irq_cap_notify(uint32_t irq_num) {
   spin_lock(&slot->lock);
   thread_t *waiter = slot->waiting_thread;
   slot->waiting_thread = NULL;
+  struct kobj *notify_ep = slot->notify_ep;
   spin_unlock(&slot->lock);
 
-  if (waiter) {
-    waiter->state = T_READY;
-    scheduler_add(waiter);
+  if (waiter) { waiter->state = T_READY; scheduler_add(waiter); }
+
+  if (notify_ep && notify_ep->type == KOBJ_ENDPOINT) {
+    kobj_endpoint_t *ep = (kobj_endpoint_t *)notify_ep->payload;
+    spin_lock(&ep->lock);
+    ep->pending_notify_mask |= (1u << irq_num);
+    ep->notify_data[irq_num] = data;
+    thread_t *ws = ep->waiting_server;
+    if (ws) { ep->waiting_server = NULL; ws->state = T_READY; scheduler_add(ws); }
+    spin_unlock(&ep->lock);
   }
+}
+
+void irq_cap_notify(uint32_t irq_num) { irq_cap_notify_data(irq_num, 0); }
+
+int sys_irq_notify(cap_handle_t irq_cap, cap_handle_t ep_cap) {
+  process_t *proc = scheduler_get_current()->proc;
+  const cap_entry_t *ie = cap_resolve(proc, irq_cap, R_IRQ_WAIT);
+  if (!ie || ie->obj->type != KOBJ_IRQ) return KERR_INVAL;
+  kobj_irq_t *slot = (kobj_irq_t *)ie->obj->payload;
+  if (!slot) return KERR_INVAL;
+
+  const cap_entry_t *ee = cap_resolve(proc, ep_cap, 0);
+  if (!ee || ee->obj->type != KOBJ_ENDPOINT) return KERR_INVAL;
+
+  kobj_get(ee->obj);
+  spin_lock(&slot->lock);
+  if (slot->notify_ep) kobj_put(slot->notify_ep);
+  slot->notify_ep = ee->obj;
+  spin_unlock(&slot->lock);
+  return KERR_OK;
+}
+
+bool irq_has_notify_ep(uint32_t irq_num) {
+  if (irq_num >= 16) return false;
+  kobj_irq_t *slot = irq_slots[irq_num];
+  return slot && slot->notify_ep != NULL;
 }

@@ -32,7 +32,11 @@ enum {
   SYS_VSPACE_SELF  = 0x14,
   SYS_PAGE_ALLOC   = 0x15,
   SYS_VSPACE_MAP   = 0x16,
-  SYS_VSPACE_UNMAP = 0x17,
+  SYS_VSPACE_UNMAP  = 0x17,
+  SYS_IRQ_NOTIFY    = 0x18,
+  SYS_DEFER_CALL    = 0x19,
+  SYS_REPLY_TO      = 0x1A,
+  SYS_BOOTSTRAP_CAP = 0x1B,
 };
 
 /* ---- protocol operation rights ---- */
@@ -52,7 +56,8 @@ enum {
   IPC_OP_WRITE = 2,
   IPC_OP_READ  = 3,
   IPC_OP_CLOSE = 4,
-  IPC_OP_EXEC  = 5,
+  IPC_OP_EXEC   = 5,
+  IPC_OP_NOTIFY = 6,
 };
 
 /* ---- kobj types ---- */
@@ -296,6 +301,24 @@ static inline int sys_vspace_unmap(cap_handle_t vspace,
   return (int)_sc4(SYS_VSPACE_UNMAP,
                    (uint32_t)vspace, (uint32_t)(vspace >> 32),
                    (uint32_t)virt, (uint32_t)num_pages);
+}
+
+static inline int sys_irq_notify(cap_handle_t irq_cap, cap_handle_t ep_cap) {
+  return (int)_sc4(SYS_IRQ_NOTIFY,
+                   (uint32_t)irq_cap, (uint32_t)(irq_cap >> 32),
+                   (uint32_t)ep_cap,  (uint32_t)(ep_cap >> 32));
+}
+
+static inline uint32_t sys_defer_call(void) {
+  return (uint32_t)_sc0(SYS_DEFER_CALL);
+}
+
+static inline int sys_reply_to(uint32_t token, sys_ipc_msg_t *msg) {
+  return (int)_sc2(SYS_REPLY_TO, token, (uint32_t)(uintptr_t)msg);
+}
+
+static inline cap_handle_t sys_bootstrap_cap(uint32_t slot) {
+  return _sc1(SYS_BOOTSTRAP_CAP, slot);
 }
 
 #endif /* ULIB_SYSCALL_H_ */

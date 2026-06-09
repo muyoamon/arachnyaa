@@ -21,6 +21,8 @@ typedef struct process {
 
   struct thread *waiting_thread;
 
+  struct ipc_call *saved_calls[4];
+
   struct process *next;
 } process_t;  
 

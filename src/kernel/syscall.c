@@ -80,6 +80,16 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
   case SYS_VSPACE_UNMAP:
     return sys_vspace_unmap(syscall_cap(a0, a1), (uintptr_t)a2, (size_t)a3);
 
+  /* Phase 3 additions */
+  case SYS_IRQ_NOTIFY:
+    return sys_irq_notify(syscall_cap(a0, a1), syscall_cap(a2, a3));
+  case SYS_DEFER_CALL:
+    return sys_defer_call();
+  case SYS_REPLY_TO:
+    return sys_reply_to((uint32_t)a0, (const sys_ipc_msg_t *)a1);
+  case SYS_BOOTSTRAP_CAP:
+    return sys_bootstrap_cap((uint32_t)a0);
+
   default:
     return -1;
   }
