@@ -69,6 +69,12 @@ enum {
 enum {
   SYS_PROG_F_BOOTMODULE = 1 << 13,
   SYS_PROG_F_USERMEM    = 1 << 14,
+  SYS_PROG_F_VSPACE     = 1 << 15,
+};
+
+/* ---- capability rights (for sys_cap_restrict) ---- */
+enum {
+  R_PROC_WAIT = 1u << 4,
 };
 
 /* ---- page alloc flags ---- */

@@ -60,6 +60,36 @@ process_t *process_get_all(void) {
   return proc_head;
 }
 
+process_t *process_spawn_from_vspace(as_t *as, uintptr_t entry,
+                                     uintptr_t user_sp, const char *argv0) {
+  (void)argv0;
+  process_t *p = process_alloc();
+  if (!p) return NULL;
+
+  p->pid = next_pid++;
+
+  thread_t *cur = scheduler_get_current();
+  if (cur && cur->proc) {
+    if (process_namespace_inherit(&p->ns, &cur->proc->ns)) {
+      process_free(p);
+      return NULL;
+    }
+  }
+
+  as_get(as);
+  p->mm = as;
+
+  p->main = thread_alloc();
+  if (!p->main) {
+    process_free(p);
+    return NULL;
+  }
+  thread_usetup(p->main, (void *)entry, (void *)user_sp);
+  p->main->proc = p;
+
+  return p;
+}
+
 /*
  * @brief Creates a new kernel task.
  * @param entry_point Pointer to the function the task should start executing.

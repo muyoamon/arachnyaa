@@ -152,6 +152,23 @@ int sys_recv(cap_handle_t endpoint_handle, sys_ipc_msg_t *out) {
     return err;
   }
 
+  /* Transfer capability handles from caller's cap table into server's. */
+  if (call->request.num_handles > 0 && call->client_proc) {
+    process_t *client = call->client_proc;
+    process_t *server = thread->proc;
+    for (uint32_t i = 0; i < call->request.num_handles; i++) {
+      if (!call->request.handles[i]) continue;
+      const cap_entry_t *e = cap_resolve(client, call->request.handles[i], 0);
+      if (!e) { call->request.handles[i] = 0; continue; }
+      cap_handle_t new_h = 0;
+      if (kcap_transfer(client, server, call->request.handles[i],
+                        e->rights.bits, &new_h) != 0)
+        call->request.handles[i] = 0;
+      else
+        call->request.handles[i] = new_h;
+    }
+  }
+
   umsg_cpy(&call->request, out);
 
   return KERR_OK;

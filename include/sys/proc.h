@@ -30,6 +30,8 @@ typedef enum {
   SYS_PROG_F_BOOTMODULE = 1 << 13,
   /* User-memory ELF flag: payload points to ELF bytes in caller's address space */
   SYS_PROG_F_USERMEM = 1 << 14,
+  /* Vspace flag: vspace+entry+user_sp provided; no ELF loading */
+  SYS_PROG_F_VSPACE = 1 << 15,
 } sys_proc_flag_t;
 
 /**

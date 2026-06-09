@@ -4,6 +4,7 @@
 #include "kernel/elf_loader.h"
 #include "kernel/error.h"
 #include "kernel/kobj.h"
+#include "kernel/mm.h"
 #include "mm/kheap.h"
 #include "mm/vmm.h"
 #include "process/process.h"
@@ -88,6 +89,17 @@ int sys_proc_spawn(sys_proc_arg_t *args, pid_t *pid, cap_handle_t *cap) {
     };
     child = process_spawn_from_elf(&img, args->argv0);
     kfree(elf_buf);
+    if (!child) return KERR_UNKNOWN;
+
+  } else if (args->flags & SYS_PROG_F_VSPACE) {
+    if (!args->entry || !args->vspace) return KERR_INVAL;
+
+    const cap_entry_t *as_e = cap_resolve(parent, args->vspace, R_AS_MAP);
+    if (!as_e || as_e->obj->type != KOBJ_ASPACE) return KERR_INVAL;
+    as_t *target_as = (as_t *)as_e->obj->payload;
+
+    child = process_spawn_from_vspace(target_as, args->entry,
+                                      args->user_sp, args->argv0);
     if (!child) return KERR_UNKNOWN;
 
   } else {

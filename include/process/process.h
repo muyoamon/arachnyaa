@@ -52,6 +52,18 @@ process_t* process_create_kernel_process(void(*entry_point)(void*));
 
 process_t* process_spawn_from_elf(const elf_image_t *img, const char *argv0);
 
+/**
+ * @brief Spawn a process in an existing address space.
+ *
+ * @param[in] as  Address space to run in (refcount is bumped).
+ * @param[in] entry   Entry-point virtual address.
+ * @param[in] user_sp Initial user stack pointer.
+ * @param[in] argv0   Process name (informational).
+ * @return Allocated process, or NULL on failure.
+ */
+process_t *process_spawn_from_vspace(as_t *as, uintptr_t entry,
+                                     uintptr_t user_sp, const char *argv0);
+
 
 /**
  * @brief Get list of processes.

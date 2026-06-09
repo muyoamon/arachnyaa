@@ -367,6 +367,20 @@ void _start(void) {
     (void)focus_handle; /* stored for future focus switching */
   }
 
+  /* Bind proc: protocol and spawn procd. */
+  {
+    cap_handle_t proc_ep = sys_ep_create();
+    sys_ns_bind("proc", proc_ep, KOP_OPEN | KOP_CALL | KOP_CLOSE);
+
+    sys_proc_arg_t proc_arg;
+    memset(&proc_arg, 0, sizeof(proc_arg));
+    proc_arg.flags    = SYS_PROG_F_BOOTMODULE;
+    proc_arg.module_name = "procd";
+    proc_arg.argv0    = "procd";
+    proc_arg.endpoint = proc_ep;
+    sys_spawn(&proc_arg, NULL, NULL);
+  }
+
   bind_log_protocol();
   bind_bm_protocol();
   spawn_log_client();
