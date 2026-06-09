@@ -381,6 +381,21 @@ void _start(void) {
     sys_spawn(&proc_arg, NULL, NULL);
   }
 
+  /* Bind elfloader: protocol and spawn elfloader. */
+  {
+    cap_handle_t elf_ep = sys_ep_create();
+    sys_ns_bind("elfloader", elf_ep,
+                KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
+
+    sys_proc_arg_t elf_arg;
+    memset(&elf_arg, 0, sizeof(elf_arg));
+    elf_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    elf_arg.module_name = "elfloader";
+    elf_arg.argv0       = "elfloader";
+    elf_arg.endpoint    = elf_ep;
+    sys_spawn(&elf_arg, NULL, NULL);
+  }
+
   bind_log_protocol();
   bind_bm_protocol();
   spawn_log_client();
