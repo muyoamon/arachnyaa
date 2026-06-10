@@ -1,18 +1,12 @@
-# Graph Report - arachnyaa  (2026-06-10)
+# Graph Report - .  (2026-06-10)
 
 ## Corpus Check
-- 123 files · ~36,504 words
-- Verdict: corpus is large enough that graph structure adds value.
+- Corpus is ~36,504 words - fits in a single context window. You may not need a graph.
 
 ## Summary
-- 691 nodes · 1484 edges · 81 communities
+- 679 nodes · 1484 edges · 78 communities (77 shown, 1 thin omitted)
 - Extraction: 70% EXTRACTED · 30% INFERRED · 0% AMBIGUOUS · INFERRED: 444 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `18939c1f`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Boot & TTY Drivers|Boot & TTY Drivers]]
@@ -36,9 +30,6 @@
 - [[_COMMUNITY_Kernel CMake Build|Kernel CMake Build]]
 - [[_COMMUNITY_Kernel Source CMake Groups|Kernel Source CMake Groups]]
 - [[_COMMUNITY_Misc spec syscall abi|Misc: spec syscall abi]]
-- [[_COMMUNITY_Community 78|Community 78]]
-- [[_COMMUNITY_Community 79|Community 79]]
-- [[_COMMUNITY_Community 80|Community 80]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `kmain()` - 36 edges
@@ -53,8 +44,8 @@
 10. `cap_handle_t` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `_start()` --calls--> `sys_open()`  [INFERRED]
-  user/shell/main.c → src/sys/namespace.c
+- `Filesystem Service (fs:)` --semantically_similar_to--> `bm: Boot Module Protocol`  [INFERRED] [semantically similar]
+  ROADMAP.md → SPEC.md
 - `serial_init()` --calls--> `outb()`  [INFERRED]
   src/kernel/tty.c → include/drivers/io.h
 - `tty_update_cursor()` --calls--> `outb()`  [INFERRED]
@@ -74,31 +65,31 @@
 - **User-Space Executable Programs** — initd_cmakelists_initd_target, ttyd_cmakelists_ttyd_target, procd_cmakelists_procd_target, elfloader_cmakelists_elfloader_target, shell_cmakelists_shell_target [EXTRACTED 0.95]
 - **Kernel Source Groups** — kernel_cmakelists_kernel_sources, mm_cmakelists_mm_sources, process_cmakelists_process_sources, sys_cmakelists_sys_sources [EXTRACTED 0.95]
 
-## Communities (81 total, 0 thin omitted)
+## Communities (78 total, 1 thin omitted)
 
 ### Community 0 - "Boot & TTY Drivers"
 Cohesion: 0.07
-Nodes (60): multiboot_find_module(), multiboot_get_info(), multiboot_map_bootinfo(), multiboot_set_info(), multiboot_unmap_bootinfo(), vga_color(), kmain(), serial_init() (+52 more)
+Nodes (64): multiboot_find_module(), multiboot_get_info(), multiboot_map_bootinfo(), multiboot_set_info(), multiboot_unmap_bootinfo(), vga_color(), kmain(), kprint() (+56 more)
 
 ### Community 1 - "Kernel Bootstrap & IPC"
 Cohesion: 0.07
-Nodes (60): spinlock_t, ipc_call_t, bm_vmobj_release(), bootstrap_endpoint_create(), endpoint_release(), process_install_boot_manifest_cap(), process_install_bootstrap_log_handler(), ipc_call() (+52 more)
+Nodes (56): spinlock_t, ipc_call_t, bm_vmobj_release(), bootstrap_endpoint_create(), endpoint_release(), process_install_boot_manifest_cap(), process_install_bootstrap_log_handler(), ipc_call() (+48 more)
 
 ### Community 2 - "Capability Resolution & Strings"
-Cohesion: 0.43
-Nodes (5): mempcpy(), stpcpy(), strcat(), strcpy(), strlen()
+Cohesion: 0.09
+Nodes (41): cap_entry_t, cap_resolve(), scheduler_get_current(), mempcpy(), stpcpy(), strcat(), strcpy(), strlen() (+33 more)
 
 ### Community 3 - "Hardware I/O & IRQ"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (32): arch_registers_t, inb(), outb(), keyboard_handle_scancode(), keyboard_init(), irq_flags_t, irq_exit_tail(), irq_rm_flag() (+24 more)
 
 ### Community 4 - "Capability Table Management"
-Cohesion: 0.08
-Nodes (61): cap_entry_t, cap_rights_t, cap_sys_arg_t, cap_table_t, cap_alloc_slot(), cap_free_slot(), cap_make_handle(), cap_next_gen() (+53 more)
+Cohesion: 0.12
+Nodes (39): cap_rights_t, cap_sys_arg_t, cap_table_t, cap_alloc_slot(), cap_free_slot(), cap_make_handle(), cap_next_gen(), cap_table_destroy() (+31 more)
 
 ### Community 5 - "ELF Loader & initd Services"
-Cohesion: 0.08
-Nodes (46): handle_exec(), handle_open(), pg_ceil(), pg_floor(), _start(), bind_bm_protocol(), bind_log_protocol(), bm_find_module() (+38 more)
+Cohesion: 0.10
+Nodes (38): handle_exec(), handle_open(), pg_ceil(), pg_floor(), _start(), bind_bm_protocol(), bind_log_protocol(), bm_find_module() (+30 more)
 
 ### Community 6 - "Process Namespace & Context"
 Cohesion: 0.09
@@ -121,12 +112,12 @@ Cohesion: 0.14
 Nodes (27): as_t, as_get(), as_load_ptable(), rq_init(), rq_peek(), rq_pop(), rq_push(), rq_remove() (+19 more)
 
 ### Community 11 - "Project Docs & Roadmap"
-Cohesion: 0.11
-Nodes (17): Arachnyaa Resource Model Spec, `bm:` (served by `initd`), Boot Path, Capability and handle model, `elfloader:` (served by `elfloader`), Frozen Rules, IPC model, `IPC_OP_EXEC` (convention, not a kernel syscall) (+9 more)
+Cohesion: 0.10
+Nodes (31): Milestone 1: Core Substrate, Milestone 2: First Vertical Slice, Milestone 3: Interactive Shell, Milestone 4: Pipes and Filesystem, Arachnyaa OS, Microkernel Design, Filesystem Service (fs:), Namespace Isolation on Spawn (+23 more)
 
 ### Community 12 - "Virtual Memory Manager"
-Cohesion: 0.16
-Nodes (25): crit_enter(), crit_exit(), vmm_alloc(), vmm_alloc_region(), vmm_any(), vmm_decode(), vmm_exactly_one(), vmm_free() (+17 more)
+Cohesion: 0.17
+Nodes (24): crit_enter(), crit_exit(), vmm_alloc(), vmm_alloc_region(), vmm_any(), vmm_decode(), vmm_exactly_one(), vmm_free() (+16 more)
 
 ### Community 13 - "Memory Free Tracker (AVL)"
 Cohesion: 0.26
@@ -156,35 +147,20 @@ Nodes (4): x86 Architecture CMake Target, arachnyaa_kernel CMake Target, Drivers
 Cohesion: 0.50
 Nodes (4): Kernel CMake Sources, Memory Manager CMake Sources, Process Layer CMake Sources, Syscall Handler CMake Sources
 
-### Community 65 - "Misc: spec syscall abi"
-Cohesion: 0.13
-Nodes (14): Arachnyaa Roadmap, Completed, Core kernel substrate, Default namespace, Extended kernel primitives, Filesystem / persistent storage, Multiple virtual terminals, Namespace isolation on spawn (+6 more)
-
-### Community 78 - "Community 78"
-Cohesion: 0.33
-Nodes (5): Arachnyaa Implementation Plan, Milestone 1: Core substrate ✓, Milestone 2: First vertical slice ✓, Milestone 3: Interactive shell ✓, Milestone 4: Pipes and filesystem
-
-### Community 79 - "Community 79"
-Cohesion: 0.47
-Nodes (5): cap_handle_t, kobj_t, process_t, _cap_resolve(), sys_write()
-
-### Community 80 - "Community 80"
-Cohesion: 0.40
-Nodes (4): arachnyaa, Architecture, Build, Current State
-
 ## Knowledge Gaps
-- **82 isolated node(s):** `Milestone 1: Core substrate ✓`, `Milestone 2: First vertical slice ✓`, `Milestone 3: Interactive shell ✓`, `Milestone 4: Pipes and filesystem`, `Current State` (+77 more)
+- **56 isolated node(s):** `multiboot_module_t`, `multiboot_info_t`, `kobj_type_t`, `revnode_t`, `kobj_t` (+51 more)
   These have ≤1 connection - possible missing edges or undocumented components.
+- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `scheduler_get_current()` connect `Capability Table Management` to `Boot & TTY Drivers`, `Kernel Bootstrap & IPC`, `ELF Loader & initd Services`, `Process Namespace & Context`, `Address Space & ELF Parsing`, `Memory Manager & Scheduler`, `Community 79`?**
-  _High betweenness centrality (0.224) - this node is a cross-community bridge._
-- **Why does `sys_open()` connect `ELF Loader & initd Services` to `Kernel Bootstrap & IPC`, `Capability Table Management`, `Interactive Shell`, `Process Namespace & Context`?**
-  _High betweenness centrality (0.163) - this node is a cross-community bridge._
-- **Why does `_start()` connect `ELF Loader & initd Services` to `User-Space Syscall Library`?**
-  _High betweenness centrality (0.156) - this node is a cross-community bridge._
+- **Why does `kmain()` connect `Boot & TTY Drivers` to `Kernel Bootstrap & IPC`, `Hardware I/O & IRQ`, `Process Namespace & Context`, `Memory Manager & Scheduler`, `Virtual Memory Manager`?**
+  _High betweenness centrality (0.105) - this node is a cross-community bridge._
+- **Why does `scheduler_get_current()` connect `Capability Resolution & Strings` to `Boot & TTY Drivers`, `Kernel Bootstrap & IPC`, `Capability Table Management`, `Process Namespace & Context`, `Address Space & ELF Parsing`, `Memory Manager & Scheduler`?**
+  _High betweenness centrality (0.082) - this node is a cross-community bridge._
+- **Why does `kfree()` connect `Kernel Bootstrap & IPC` to `Capability Table Management`, `Memory Free Tracker (AVL)`, `Process Namespace & Context`, `Address Space & ELF Parsing`?**
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
 - **Are the 35 inferred relationships involving `kmain()` (e.g. with `multiboot_find_module()` and `multiboot_map_bootinfo()`) actually correct?**
   _`kmain()` has 35 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 32 inferred relationships involving `scheduler_get_current()` (e.g. with `sys_bootstrap_cap()` and `sys_cap_close()`) actually correct?**
