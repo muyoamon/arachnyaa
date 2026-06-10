@@ -115,6 +115,10 @@ void _start(void) {
   if (g_tty == 0)
     sys_exit(1);
 
+  // clear the terminal 
+  tty_write("\033[2J\033[H", 7);
+
+
   tty_puts("arachnyaa shell\n");
 
   for (;;) {
@@ -133,6 +137,11 @@ void _start(void) {
     /* Builtins */
     if (strcmp(tokens[0], "exit") == 0)
       sys_exit(0);
+
+    if (strcmp(tokens[0], "clear") == 0) {
+      tty_write("\033[2J\033[H", 7);
+      continue;
+    }
 
     if (strcmp(tokens[0], "set") == 0) {
       if (tc >= 3) var_set(tokens[1], tokens[2]);

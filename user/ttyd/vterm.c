@@ -24,7 +24,45 @@ void vterm_init(vterm_t *vt, uint8_t attr) {
             vt->cells[r][c] = blank;
 }
 
-void vterm_putchar(vterm_t *vt, char c) {
+/* Dispatch a completed CSI sequence: ESC [ params... cmd */
+static void vterm_csi(vterm_t *vt, char cmd) {
+    uint16_t p0 = vt->csi_params[0];
+    uint16_t p1 = vt->csi_params[1];
+    uint16_t blank = (uint16_t)((uint16_t)vt->attr << 8) | (uint8_t)' ';
+
+    switch (cmd) {
+    case 'J':  /* erase display */
+        if (p0 == 2) {
+            for (uint32_t r = 0; r < (uint32_t)VT_ROWS; r++)
+                for (uint32_t c = 0; c < (uint32_t)VT_COLS; c++)
+                    vt->cells[r][c] = blank;
+        }
+        break;
+    case 'H':  /* cursor position: ESC[row;colH (1-indexed; 0 treated as 1) */
+    case 'f':
+        vt->cy = (uint8_t)(p0 > 0 ? p0 - 1 : 0);
+        vt->cx = (uint8_t)(p1 > 0 ? p1 - 1 : 0);
+        if (vt->cy >= VT_ROWS) vt->cy = VT_ROWS - 1;
+        if (vt->cx >= VT_COLS) vt->cx = VT_COLS - 1;
+        break;
+    case 'K':  /* erase line */
+        if (p0 == 0) {
+            for (uint8_t c = vt->cx; c < VT_COLS; c++)
+                vt->cells[vt->cy][c] = blank;
+        } else if (p0 == 1) {
+            for (uint8_t c = 0; c <= vt->cx; c++)
+                vt->cells[vt->cy][c] = blank;
+        } else if (p0 == 2) {
+            for (uint8_t c = 0; c < VT_COLS; c++)
+                vt->cells[vt->cy][c] = blank;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void vterm_putchar_normal(vterm_t *vt, char c) {
     if (c == '\n') {
         vt->cx = 0;
         vt->cy++;
@@ -46,6 +84,40 @@ void vterm_putchar(vterm_t *vt, char c) {
             if (vt->cy >= VT_ROWS)
                 vterm_scroll(vt);
         }
+    }
+}
+
+void vterm_putchar(vterm_t *vt, char c) {
+    switch (vt->esc_state) {
+    case VTS_ESC:
+        if (c == '[') {
+            vt->esc_state = VTS_CSI;
+            vt->csi_params[0] = vt->csi_params[1] =
+            vt->csi_params[2] = vt->csi_params[3] = 0;
+            vt->csi_nparam = 0;
+        } else {
+            vt->esc_state = VTS_NORMAL;
+            vterm_putchar_normal(vt, c);
+        }
+        return;
+    case VTS_CSI:
+        if (c >= '0' && c <= '9') {
+            uint8_t i = vt->csi_nparam < 3 ? vt->csi_nparam : 3u;
+            vt->csi_params[i] = (uint16_t)(vt->csi_params[i] * 10u + (uint8_t)(c - '0'));
+        } else if (c == ';') {
+            if (vt->csi_nparam < 3) vt->csi_nparam++;
+        } else {
+            vt->esc_state = VTS_NORMAL;
+            vterm_csi(vt, c);
+        }
+        return;
+    default: /* VTS_NORMAL */
+        if (c == '\033') {
+            vt->esc_state = VTS_ESC;
+            return;
+        }
+        vterm_putchar_normal(vt, c);
+        break;
     }
 }
 

@@ -9,6 +9,11 @@
 #define VT_ROWS     25
 #define VT_LINE_MAX 256
 
+/* ANSI escape parser states */
+#define VTS_NORMAL 0
+#define VTS_ESC    1  /* received ESC, waiting for '[' */
+#define VTS_CSI    2  /* received ESC '[', collecting params */
+
 typedef struct {
     uint16_t cells[VT_ROWS][VT_COLS];
     uint8_t  cx;
@@ -19,6 +24,10 @@ typedef struct {
     bool     line_ready;
     uint32_t defer_token;      /* valid when has_pending_read */
     bool     has_pending_read;
+    /* ANSI escape state */
+    uint8_t  esc_state;
+    uint16_t csi_params[4];
+    uint8_t  csi_nparam;
 } vterm_t;
 
 void     vterm_init(vterm_t *vt, uint8_t attr);
