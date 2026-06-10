@@ -17,3 +17,7 @@ iso/
 
 .codex
 CLAUDE.md
+
+graphify-out/manifest.json 
+graphify-out/.graphify_root
+graphify-out/.graphify_python

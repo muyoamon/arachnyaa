@@ -2,15 +2,11 @@
 #include "kernel/kobj.h"
 #include "lib/string.h"
 
-static size_t protocol_len(const char *protocol) {
-  size_t len = 0;
-  while (protocol[len] != '\0') {
-    if (protocol[len] == ':') {
-      return 0;
-    }
-    len++;
+static int contains_colon(const char *protocol) {
+  for (size_t i = 0; protocol[i] != '\0'; i++) {
+    if (protocol[i] == ':') return 1;
   }
-  return len;
+  return 0;
 }
 
 void process_namespace_init(process_namespace_t *ns) {
@@ -41,8 +37,11 @@ int process_namespace_inherit(process_namespace_t *dst,
 
 int process_namespace_bind(process_namespace_t *ns, const char *protocol,
                            kobj_t *handler, uint32_t declared_ops) {
-  size_t len = protocol_len(protocol);
-  if (len == 0 || len >= PROCESS_PROTOCOL_NAME_MAX) {
+  if (contains_colon(protocol)) {
+    return KERR_INVAL;
+  }
+  size_t len = strlen(protocol);
+  if (len >= PROCESS_PROTOCOL_NAME_MAX) {
     return KERR_INVAL;
   }
   if (!handler) {

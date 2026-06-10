@@ -107,6 +107,9 @@ static void bind_bm_protocol(void) {
   static const char protocol[] = "bm";
   sys_ns_bind(protocol, BOOTSTRAP_LOG_HANDLER,
               KOP_OPEN | KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE);
+  /* Also bind the default namespace ("") so bare names resolve via bm. */
+  sys_ns_bind("", BOOTSTRAP_LOG_HANDLER,
+              KOP_OPEN | KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE);
 }
 
 // static void spawn_log_client(void) {
@@ -153,13 +156,18 @@ static void handle_bm_open(const sys_ipc_msg_t *req) {
   memset(&reply, 0, sizeof(reply));
   memset(&open_reply, 0, sizeof(open_reply));
 
-  /* data contains "bm:<name>" — skip the 3-byte prefix */
-  if (req->num_bytes <= 3) {
+  /* data contains "<proto>:<name>"; strip up to and including the colon */
+  const char *data_str = (const char *)req->data;
+  size_t colon_pos = req->num_bytes;
+  for (size_t i = 0; i < req->num_bytes; i++) {
+    if (data_str[i] == ':') { colon_pos = i; break; }
+  }
+  if (colon_pos == req->num_bytes) {
     sys_reply(&reply);
     return;
   }
-  const char *name = (const char *)req->data + 3;
-  size_t name_len = req->num_bytes - 3;
+  const char *name = data_str + colon_pos + 1;
+  size_t name_len = req->num_bytes - colon_pos - 1;
 
   int idx = bm_find_module(name, name_len);
   if (idx < 0) {
@@ -351,7 +359,7 @@ static void server_loop(void) {
       size_t len = req.num_bytes;
       if (starts_with(data, len, "log:"))
         handle_log_open(&req);
-      else if (starts_with(data, len, "bm:"))
+      else if (starts_with(data, len, "bm:") || starts_with(data, len, ":"))
         handle_bm_open(&req);
       else
         handle_unknown();

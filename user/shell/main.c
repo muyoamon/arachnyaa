@@ -4,10 +4,9 @@
  * Opens tty:0 for terminal I/O.  Command syntax:
  *   [proto:]name [args...]
  *
- * If no ':' in the first token, each prefix in $PATH is tried in order.
- * Default $PATH = "bm".
+ * Bare names (no ':') resolve via the default namespace ("") binding.
  *
- * Builtins: exit, set VAR VALUE, unset VAR
+ * Builtins: exit, set VAR VALUE, unset VAR, clear
  */
 
 #include <stddef.h>
@@ -24,13 +23,6 @@
 static char var_names[MAX_VARS][32];
 static char var_vals[MAX_VARS][64];
 static int  var_count = 0;
-
-static const char *var_get(const char *name) {
-  for (int i = 0; i < var_count; i++)
-    if (strcmp(var_names[i], name) == 0)
-      return var_vals[i];
-  return NULL;
-}
 
 static void var_set(const char *name, const char *val) {
   for (int i = 0; i < var_count; i++) {
@@ -101,15 +93,9 @@ static int tokenize(char *line, size_t len,
   return count;
 }
 
-static int has_colon(const char *s) {
-  while (*s) if (*s++ == ':') return 1;
-  return 0;
-}
-
 /* ---- entry ---- */
 
 void _start(void) {
-  var_set("PATH", "bm");
 
   g_tty = sys_open("tty:0", 0);
   if (g_tty == 0)
@@ -153,39 +139,8 @@ void _start(void) {
       continue;
     }
 
-    /* Resolve command to an exec handle */
-    cap_handle_t exec_h = 0;
-
-    if (has_colon(tokens[0])) {
-      // tty_puts(tokens[0]);
-      exec_h = (cap_handle_t)sys_open(tokens[0], 0);
-    } else {
-      const char *path = var_get("PATH");
-      if (!path) path = "bm";
-      char path_buf[128];
-      strncpy(path_buf, path, sizeof(path_buf) - 1);
-      path_buf[sizeof(path_buf) - 1] = '\0';
-
-      char *p = path_buf;
-      while (*p && exec_h == 0) {
-        char *end = p;
-        while (*end && *end != ' ') end++;
-        int more = (*end == ' ');
-        if (more) *end = '\0';
-
-        char resolved[96];
-        size_t plen = strlen(p);
-        size_t clen = strlen(tokens[0]);
-        if (plen + 1u + clen < sizeof(resolved)) {
-          memcpy(resolved, p, plen);
-          resolved[plen] = ':';
-          memcpy(resolved + plen + 1u, tokens[0], clen + 1u);
-          exec_h = (cap_handle_t)sys_open(resolved, 0);
-        }
-
-        p = more ? end + 1 : end;
-      }
-    }
+    /* Resolve command to an exec handle via the kernel namespace. */
+    cap_handle_t exec_h = (cap_handle_t)sys_open(tokens[0], 0);
 
     if (exec_h == 0) {
       tty_puts("not found: ");

@@ -28,8 +28,11 @@ static int parse_resource_name(const char *name, char *protocol,
     idx++;
   }
 
-  if (idx == 0 || name[idx] != ':') {
-    return KERR_INVAL;
+  if (name[idx] != ':') {
+    /* No colon: empty protocol, whole string is the path. */
+    protocol[0] = '\0';
+    *path_out = name;
+    return 0;
   }
 
   protocol[idx] = '\0';
