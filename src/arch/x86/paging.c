@@ -4,6 +4,8 @@
 #include "drivers/io.h"
 #include "drivers/tty.h"
 #include "kernel/error.h"
+#include "process/process.h"
+#include "process/scheduler.h"
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
@@ -198,20 +200,19 @@ static uint64_t user_get_pte(uintptr_t utable, uintptr_t vaddr) {
   return pte;
 }
 
-void page_fault_handler(uint32_t error_code) {
+void page_fault_handler(uint32_t error_code, uint32_t eip) {
   uintptr_t fault_addr = read_cr2();
   bool present = error_code & 0x01;
-  // bool write = error_code & 0x02;
   bool user = error_code & 0x04;
-  // bool reserved = error_code & 0x08;
-  // bool instruction = error_code & 0x10;
 
-  /* Demand-paging: satisfy not-present faults by allocating a physical frame. */
-  if (!present) {
+  /* Demand-paging: kernel-mode not-present faults only.
+     User-mode P=0 faults mean a bad pointer — don't demand-page them.
+     (vmm_map uses self-referencing with global pdpt[], which would corrupt
+     the user's PD by writing intermediate entries without PTE_USER.) */
+  if (!present && !user) {
     uintptr_t phys = (uintptr_t)pmm_alloc_frame();
     if (phys) {
-      vmm_map(fault_addr, phys, 1,
-              PTE_PRESENT | PTE_WRITABLE | (user ? PTE_USER : 0));
+      vmm_map(fault_addr, phys, 1, PTE_PRESENT | PTE_WRITABLE);
       return;
     }
   }
@@ -227,18 +228,21 @@ void page_fault_handler(uint32_t error_code) {
   serial_puthex(error_code);
   serial_puts(" addr=");
   serial_puthex(fault_addr);
+  serial_puts(" eip=");
+  serial_puthex(eip);
   uintptr_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
   serial_puts(" cr3=");
   serial_puthex(cr3);
+  thread_t *cur = scheduler_get_current();
+  if (cur && cur->proc) {
+    serial_puts(" pid=");
+    serial_puthex((uint32_t)cur->proc->pid);
+  }
   if (user) {
     uint64_t pte = user_get_pte(cr3, fault_addr);
     serial_puts(" pte=");
     serial_puthex64(pte);
-    /* Also dump PTE for the page-aligned base */
-    uint64_t pte_page = user_get_pte(cr3, fault_addr & ~0xFFFu);
-    serial_puts(" pte_page=");
-    serial_puthex64(pte_page);
   }
   serial_puts("\r\n");
 

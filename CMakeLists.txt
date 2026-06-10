@@ -81,17 +81,26 @@ if(TARGET arachnyaa_kernel)
         COMMENT "Copy arachnyaa_elfloader to ${ISO_DIR}/boot/elfloader"
     )
 
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/shell
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_shell>
+          ${ISO_DIR}/boot/shell
+        DEPENDS arachnyaa_shell
+        COMMENT "Copy arachnyaa_shell to ${ISO_DIR}/boot/shell"
+    )
+
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/shell
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )
 
     # Run QEMU
     add_custom_target(run-qemu
-        COMMAND qemu-system-i386 -cdrom ${ISO_FILE}
+        COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -serial stdio
         DEPENDS iso
         COMMENT "Running QEMU..."
         VERBATIM

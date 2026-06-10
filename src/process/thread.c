@@ -54,7 +54,12 @@ void thread_free(thread_t *t) {
     }
 
     proc->main = NULL;  /* prevent process_free from re-entering thread_free */
-    process_free(proc);
+
+    /* Only free the process struct if no kobj_proc caps remain.
+       If caps still exist, _release_proc_cap will call process_free when
+       the last one is dropped. */
+    if (!proc->has_proc_caps)
+      process_free(proc);
   }
   arch_context_free(t->ctx);
   kstack_free(&t->kstack);

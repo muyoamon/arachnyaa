@@ -31,13 +31,14 @@ void ipc_endpoint_destroy(kobj_endpoint_t *ep) {
   if (!ep) {
     return;
   }
-  spin_lock(&ep->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&ep->lock, &flags);
   ipc_call_t *call = ep->queue_head;
   thread_t *waiting_server = ep->waiting_server;
   ep->queue_head = NULL;
   ep->queue_tail = NULL;
   ep->waiting_server = NULL;
-  spin_unlock(&ep->lock);
+  spin_unlock_irqrestore(&ep->lock, flags);
 
   if (waiting_server && waiting_server->state == T_BLOCKED) {
     waiting_server->state = T_READY;
@@ -88,7 +89,8 @@ kerror_t ipc_call_enqueue(struct kobj *endpoint, struct thread *client,
 
   kobj_get(endpoint);
 
-  spin_lock(&ep->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&ep->lock, &flags);
 
   if (ep->queue_tail) {
     ep->queue_tail->next = call;
@@ -103,7 +105,7 @@ kerror_t ipc_call_enqueue(struct kobj *endpoint, struct thread *client,
     ep->waiting_server = NULL;
   }
 
-  spin_unlock(&ep->lock);
+  spin_unlock_irqrestore(&ep->lock, flags);
 
   client->state = T_BLOCKED;
   *out_call = call;
@@ -125,14 +127,18 @@ kerror_t ipc_recv_next(struct kobj *endpoint, struct thread *server,
     return KERR_INVAL;
   }
 
-  spin_lock(&ep->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&ep->lock, &flags);
 
   if (ep->pending_notify_mask) {
     uint32_t bit = ep->pending_notify_mask & (-(int32_t)ep->pending_notify_mask);
     uint32_t irq_num = (uint32_t)__builtin_ctz(ep->pending_notify_mask);
-    ep->pending_notify_mask &= ~bit;
-    uint8_t data = ep->notify_data[irq_num];
-    spin_unlock(&ep->lock);
+    uint8_t head = ep->notify_head[irq_num];
+    uint8_t data = ep->notify_ring[irq_num][head];
+    ep->notify_head[irq_num] = (uint8_t)((head + 1u) % NOTIFY_RING_SIZE);
+    if (ep->notify_head[irq_num] == ep->notify_tail[irq_num])
+      ep->pending_notify_mask &= ~bit; /* clear mask only when ring is empty */
+    spin_unlock_irqrestore(&ep->lock, flags);
 
     ipc_call_t *ncall = ipc_call_create();
     if (!ncall) return KERR_NOMEM;
@@ -152,7 +158,7 @@ kerror_t ipc_recv_next(struct kobj *endpoint, struct thread *server,
   ipc_call_t *call = ep->queue_head;
   if (!call) {
     ep->waiting_server = server;
-    spin_unlock(&ep->lock);
+    spin_unlock_irqrestore(&ep->lock, flags);
 
     server->state = T_BLOCKED;
     *out_call = NULL;
@@ -169,7 +175,7 @@ kerror_t ipc_recv_next(struct kobj *endpoint, struct thread *server,
   call->server_proc = server->proc;
   server->active_call = call;
 
-  spin_unlock(&ep->lock);
+  spin_unlock_irqrestore(&ep->lock, flags);
 
   *out_call = call;
   return KERR_OK;

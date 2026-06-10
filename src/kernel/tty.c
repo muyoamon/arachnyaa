@@ -10,6 +10,28 @@
 #define VGA_PORT_CMD 0x3D4
 #define VGA_PORT_DATA 0x3D5
 
+// --- Serial (COM1) ---
+#define SERIAL_COM1 0x3F8
+
+static void serial_init(void) {
+    outb(SERIAL_COM1 + 1, 0x00); /* disable interrupts */
+    outb(SERIAL_COM1 + 3, 0x80); /* DLAB on */
+    outb(SERIAL_COM1 + 0, 0x01); /* 115200 baud (divisor = 1) */
+    outb(SERIAL_COM1 + 1, 0x00);
+    outb(SERIAL_COM1 + 3, 0x03); /* 8N1 */
+    outb(SERIAL_COM1 + 2, 0xC7); /* FIFO, clear, 14-byte threshold */
+    outb(SERIAL_COM1 + 4, 0x0B); /* RTS+DTR, IRQ enabled */
+}
+
+static void serial_putc(char c) {
+    while (!(inb(SERIAL_COM1 + 5) & 0x20)); /* wait for TX empty */
+    if (c == '\n') {
+        outb(SERIAL_COM1, '\r');
+        while (!(inb(SERIAL_COM1 + 5) & 0x20));
+    }
+    outb(SERIAL_COM1, (uint8_t)c);
+}
+
 // --- Module State ---
 static size_t tty_row;
 static size_t tty_column;
@@ -56,6 +78,7 @@ static void tty_scroll() {
 
 // Clear the screen and reset position.
 void tty_initialize(void) {
+    serial_init();
     tty_row = 0;
     tty_column = 0;
     tty_color = vga_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
@@ -84,7 +107,8 @@ void tty_put_entry_at(char c, uint8_t color, size_t x, size_t y) {
 
 // Put a character, handling newlines and scrolling.
 void tty_putc(char c) {
-  
+  serial_putc(c);
+
   switch (c) {
     case ('\n'):
       tty_column = 0;

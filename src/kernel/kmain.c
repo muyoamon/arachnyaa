@@ -39,7 +39,7 @@ extern char _kernel_end;
 // --- The C Kernel Entry Point ---
 extern cap_handle_t process_install_bootstrap_log_handler(process_t *proc);
 extern cap_handle_t process_install_boot_manifest_cap(process_t *proc,
-                                                      uint32_t mb_info_phys);
+                                                      multiboot_info_t *mb_info);
 
 void kmain(uint32_t magic, uint32_t mb_info_addr) {
   // 1. Initialize TTY first, so we can see output!
@@ -205,7 +205,7 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
     process_t *p = process_spawn_from_elf(&img, NULL);
     if (p) {
       process_install_bootstrap_log_handler(p);
-      process_install_boot_manifest_cap(p, mb_info_addr);
+      process_install_boot_manifest_cap(p, mb_info);
       scheduler_add(p->main);
     }
   }

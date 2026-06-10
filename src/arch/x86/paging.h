@@ -13,7 +13,7 @@
 #define KERNEL_PDPT_INDEX 3
 
 
-void page_fault_handler(uint32_t error_code);
+void page_fault_handler(uint32_t error_code, uint32_t eip);
 
 
 

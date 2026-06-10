@@ -51,6 +51,7 @@ static void handle_irq(const sys_ipc_msg_t *req) {
     vterm_t *vt = &vterms[focused_vterm];
     vterm_input(vt, k);
     fb_blit(vt->cells);
+    fb_set_cursor(vt->cx, vt->cy);
 
     if (vt->line_ready && vt->has_pending_read) {
         char buf[VT_LINE_MAX];
@@ -115,6 +116,7 @@ static void handle_focus(const sys_ipc_msg_t *req) {
         if (n < vterm_count) {
             focused_vterm = (int)n;
             fb_blit(vterms[focused_vterm].cells);
+            fb_set_cursor(vterms[focused_vterm].cx, vterms[focused_vterm].cy);
         }
     }
     sys_reply(&rep);
@@ -131,8 +133,10 @@ static void dispatch_vterm(uint32_t vi, const sys_ipc_msg_t *req) {
     case IPC_OP_WRITE: {
         for (uint32_t i = 0; i < req->num_bytes; i++)
             vterm_putchar(vt, (char)req->data[i]);
-        if ((int)vi == focused_vterm)
+        if ((int)vi == focused_vterm) {
             fb_blit(vt->cells);
+            fb_set_cursor(vt->cx, vt->cy);
+        }
         uint32_t written = req->num_bytes;
         rep.num_bytes = sizeof(written);
         memcpy(rep.data, &written, sizeof(written));

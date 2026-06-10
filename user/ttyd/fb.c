@@ -1,6 +1,9 @@
 #include "fb.h"
 #include "../ulib/syscall.h"
 
+#define VGA_CRT_CMD  0x3D4u
+#define VGA_CRT_DATA 0x3D5u
+
 static volatile uint16_t *vga_buf = (volatile uint16_t *)(uintptr_t)FB_VADDR;
 
 void fb_init(void) {
@@ -33,4 +36,12 @@ void fb_blit(const uint16_t cells[FB_ROWS][FB_COLS]) {
     for (uint32_t r = 0; r < (uint32_t)FB_ROWS; r++)
         for (uint32_t c = 0; c < (uint32_t)FB_COLS; c++)
             vga_buf[r * FB_COLS + c] = cells[r][c];
+}
+
+void fb_set_cursor(uint8_t x, uint8_t y) {
+    uint16_t pos = (uint16_t)((uint16_t)y * FB_COLS + x);
+    sys_io_out(VGA_CRT_CMD,  0x0Fu);
+    sys_io_out(VGA_CRT_DATA, pos & 0xFFu);
+    sys_io_out(VGA_CRT_CMD,  0x0Eu);
+    sys_io_out(VGA_CRT_DATA, (pos >> 8) & 0xFFu);
 }

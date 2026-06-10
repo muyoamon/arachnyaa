@@ -57,10 +57,20 @@ cap_handle_t sys_vspace_self(void) {
 static void vmobj_release(kobj_t *obj) {
   if (!obj || !obj->payload) return;
   kobj_vmobj_t *vm = (kobj_vmobj_t *)obj->payload;
-  if (!vm->phys_fixed && vm->phys_frames) {
+  if (vm->phys_fixed) {
+    /* Drop the per-frame reference taken in sys_page_alloc(SYS_PAGE_F_FIXED).
+       Never call pmm_free_frame: fixed frames are boot-time or MMIO memory and
+       must remain permanently allocated in the PMM bitmap. */
     for (size_t i = 0; i < vm->num_pages; i++) {
-      if (vm->phys_frames[i])
-        pmm_free_frame((void *)vm->phys_frames[i]);
+      uintptr_t phys = vm->phys_base + i * PAGE_SIZE;
+      if (pmm_ref_count[phys / PAGE_SIZE])
+        pmm_ref_count[phys / PAGE_SIZE]--;
+    }
+  } else if (vm->phys_frames) {
+    for (size_t i = 0; i < vm->num_pages; i++) {
+      uintptr_t phys = vm->phys_frames[i];
+      if (phys && !(--pmm_ref_count[phys / PAGE_SIZE]))
+        pmm_free_frame((void *)phys);
     }
     kfree(vm->phys_frames);
   }
@@ -82,6 +92,10 @@ cap_handle_t sys_page_alloc(size_t num_pages, uint32_t flags, uintptr_t phys_add
   if (flags & SYS_PAGE_F_FIXED) {
     vm->phys_fixed = true;
     vm->phys_base = phys_addr;
+    /* Hold one refcount per fixed frame so vmm_unmap_user cannot drop them to
+       zero and call pmm_free_frame while this vmobj is still alive. */
+    for (size_t i = 0; i < num_pages; i++)
+      pmm_ref_count[(phys_addr + i * PAGE_SIZE) / PAGE_SIZE]++;
   } else {
     vm->phys_fixed = false;
     vm->phys_frames = kcalloc(num_pages, sizeof(uintptr_t));
@@ -92,20 +106,27 @@ cap_handle_t sys_page_alloc(size_t num_pages, uint32_t flags, uintptr_t phys_add
     for (size_t i = 0; i < num_pages; i++) {
       void *frame = pmm_alloc_frame();
       if (!frame) {
-        for (size_t j = 0; j < i; j++) pmm_free_frame((void *)vm->phys_frames[j]);
+        for (size_t j = 0; j < i; j++) {
+          if (--pmm_ref_count[vm->phys_frames[j] / PAGE_SIZE] == 0)
+            pmm_free_frame((void *)vm->phys_frames[j]);
+        }
         kfree(vm->phys_frames);
         kfree(vm);
         return 0;
       }
       vm->phys_frames[i] = (uintptr_t)frame;
+      pmm_ref_count[(uintptr_t)frame / PAGE_SIZE]++;
     }
   }
 
   kobj_t *obj = kobj_create();
   if (!obj) {
     if (!vm->phys_fixed && vm->phys_frames) {
-      for (size_t i = 0; i < num_pages; i++)
-        if (vm->phys_frames[i]) pmm_free_frame((void *)vm->phys_frames[i]);
+      for (size_t i = 0; i < num_pages; i++) {
+        uintptr_t phys = vm->phys_frames[i];
+        if (phys && !(--pmm_ref_count[phys / PAGE_SIZE]))
+          pmm_free_frame((void *)phys);
+      }
       kfree(vm->phys_frames);
     }
     kfree(vm);

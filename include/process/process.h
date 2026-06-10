@@ -23,8 +23,13 @@ typedef struct process {
 
   struct ipc_call *saved_calls[4];
 
+  /* True while at least one kobj_proc cap pointing to this process exists.
+     _release_proc_cap clears this; thread_free uses it to decide whether
+     to call process_free (if no caps remain) or defer cleanup. */
+  bool has_proc_caps;
+
   struct process *next;
-} process_t;  
+} process_t;
 
 
 /**

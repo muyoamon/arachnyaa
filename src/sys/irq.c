@@ -1,4 +1,5 @@
 #include "sys/irq.h"
+#include "arch/irq.h"
 #include "kernel/cap.h"
 #include "kernel/error.h"
 #include "kernel/ipc.h"
@@ -69,9 +70,10 @@ int sys_irq_wait(cap_handle_t irq_cap) {
   if (!slot) return KERR_INVAL;
 
   thread_t *current = scheduler_get_current();
-  spin_lock(&slot->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&slot->lock, &flags);
   slot->waiting_thread = current;
-  spin_unlock(&slot->lock);
+  spin_unlock_irqrestore(&slot->lock, flags);
 
   current->state = T_BLOCKED;
   scheduler_reschedule();
@@ -84,23 +86,35 @@ void irq_cap_notify_data(uint32_t irq_num, uint8_t data) {
   kobj_irq_t *slot = irq_slots[irq_num];
   if (!slot) return;
 
-  spin_lock(&slot->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&slot->lock, &flags);
   thread_t *waiter = slot->waiting_thread;
   slot->waiting_thread = NULL;
   struct kobj *notify_ep = slot->notify_ep;
-  spin_unlock(&slot->lock);
+  spin_unlock_irqrestore(&slot->lock, flags);
 
   if (waiter) { waiter->state = T_READY; scheduler_add(waiter); }
 
   if (notify_ep && notify_ep->type == KOBJ_ENDPOINT) {
     kobj_endpoint_t *ep = (kobj_endpoint_t *)notify_ep->payload;
-    spin_lock(&ep->lock);
+    spin_lock_irqsave(&ep->lock, &flags);
+    uint8_t tail = ep->notify_tail[irq_num];
+    uint8_t next = (uint8_t)((tail + 1u) % NOTIFY_RING_SIZE);
+    if (next == ep->notify_head[irq_num]) {
+      /* Ring full: drop oldest to make room */
+      ep->notify_head[irq_num] = (uint8_t)((ep->notify_head[irq_num] + 1u) % NOTIFY_RING_SIZE);
+    }
+    ep->notify_ring[irq_num][tail] = data;
+    ep->notify_tail[irq_num] = next;
     ep->pending_notify_mask |= (1u << irq_num);
-    ep->notify_data[irq_num] = data;
     thread_t *ws = ep->waiting_server;
     if (ws) { ep->waiting_server = NULL; ws->state = T_READY; scheduler_add(ws); }
-    spin_unlock(&ep->lock);
+    spin_unlock_irqrestore(&ep->lock, flags);
   }
+
+  /* Request immediate reschedule so the server processes this IRQ before
+     the next keyboard scancode can overwrite notify_data[irq_num]. */
+  irq_set_flag(IRQ_NEED_RESCHED);
 }
 
 void irq_cap_notify(uint32_t irq_num) { irq_cap_notify_data(irq_num, 0); }
@@ -116,10 +130,11 @@ int sys_irq_notify(cap_handle_t irq_cap, cap_handle_t ep_cap) {
   if (!ee || ee->obj->type != KOBJ_ENDPOINT) return KERR_INVAL;
 
   kobj_get(ee->obj);
-  spin_lock(&slot->lock);
+  uint32_t flags;
+  spin_lock_irqsave(&slot->lock, &flags);
   if (slot->notify_ep) kobj_put(slot->notify_ep);
   slot->notify_ep = ee->obj;
-  spin_unlock(&slot->lock);
+  spin_unlock_irqrestore(&slot->lock, flags);
   return KERR_OK;
 }
 

@@ -100,7 +100,7 @@ void isr_common_stub_handler(struct registers *regs) {
 
   switch (regs->int_no) {
   case 14: {
-    return page_fault_handler(regs->err_code);
+    return page_fault_handler(regs->err_code, regs->eip);
   }
   }
 

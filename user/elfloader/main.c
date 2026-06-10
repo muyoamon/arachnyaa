@@ -118,10 +118,12 @@ static void handle_exec(const sys_ipc_msg_t *req) {
   cap_handle_t watch_cap     = 0;
   int mapped_elf = 0;
 
-  if (elf_cap == 0) goto done;
+  sys_putc('X');  /* entered handle_exec */
+
+  if (elf_cap == 0) { sys_putc('1'); goto done; }
 
   self_vspace = sys_vspace_self();
-  if (self_vspace == 0) goto done;
+  if (self_vspace == 0) { sys_putc('2'); goto done; }
 
   /* Map source ELF into our address space for reading. */
   {
@@ -131,10 +133,11 @@ static void handle_exec(const sys_ipc_msg_t *req) {
       .page_cap   = elf_cap,
       .prot_flags = VMM_PROT_READ,
     };
-    if (sys_vspace_map(&ma) != 0) goto done;
+    if (sys_vspace_map(&ma) != 0) { sys_putc('3'); goto done; }
     mapped_elf = 1;
   }
 
+  sys_putc('M');  /* ELF mapped */
   const Elf32_Ehdr *eh = (const Elf32_Ehdr *)TMP_ELF_BASE;
 
   /* Validate ELF magic + class + arch. */
@@ -143,14 +146,19 @@ static void handle_exec(const sys_ipc_msg_t *req) {
       eh->e_ident[4] != ELFCLASS32 || eh->e_ident[5] != ELFDATA2LSB ||
       eh->e_version   != EV_CURRENT || eh->e_machine != EM_386 ||
       (eh->e_type != ET_EXEC && eh->e_type != ET_DYN) ||
-      eh->e_phentsize != sizeof(Elf32_Phdr))
+      eh->e_phentsize != sizeof(Elf32_Phdr)) {
+    sys_putc('4');
     goto done;
+  }
 
+  sys_putc('V');  /* ELF validated */
   uint32_t base        = (eh->e_type == ET_DYN) ? USER_ENTRY_BASE : 0u;
   uint32_t entry_point = base + eh->e_entry;
 
   target_vspace = sys_vspace_create();
-  if (target_vspace == 0) goto done;
+  if (target_vspace == 0) { sys_putc('5'); goto done; }
+
+  sys_putc('S');  /* target vspace created */
 
   /* Load each PT_LOAD segment into target_vspace. */
   const Elf32_Phdr *phdrs =
@@ -166,7 +174,7 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     uint32_t npages    = (map_end - map_begin) / PAGE_SIZE_U;
 
     cap_handle_t seg_cap = sys_page_alloc(npages, 0, 0);
-    if (seg_cap == 0) goto done;
+    if (seg_cap == 0) { sys_putc('a'); goto done; }
 
     /* Map into self at TMP_SEG_BASE for writing. */
     sys_vspace_map_args_t self_ma = {
@@ -177,6 +185,7 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     if (sys_vspace_map(&self_ma) != 0) {
       sys_cap_close(seg_cap);
+      sys_putc('b');
       goto done;
     }
 
@@ -201,13 +210,15 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     int rc = sys_vspace_map(&tgt_ma);
     sys_cap_close(seg_cap);
-    if (rc != 0) goto done;
+    if (rc != 0) { sys_putc('c'); goto done; }
+
+    sys_putc('L');  /* segment loaded */
   }
 
   /* Allocate and map user stack in target. */
   {
     cap_handle_t stk = sys_page_alloc(USER_STACK_PAGES, 0, 0);
-    if (stk == 0) goto done;
+    if (stk == 0) { sys_putc('6'); goto done; }
     sys_vspace_map_args_t stk_ma = {
       .vspace_cap = target_vspace,
       .virt_addr  = USER_STACK_BASE,
@@ -216,15 +227,18 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     int rc = sys_vspace_map(&stk_ma);
     sys_cap_close(stk);
-    if (rc != 0) goto done;
+    if (rc != 0) { sys_putc('7'); goto done; }
   }
 
+  sys_putc('K');  /* stack mapped */
   uint32_t user_sp = USER_STACK_TOP - 16u;
 
   /* Call proc:spawn via procd. */
   {
     cap_handle_t proc_spawn_h = sys_open("proc:spawn", 0);
-    if (proc_spawn_h == 0) goto done;
+    if (proc_spawn_h == 0) { sys_putc('8'); goto done; }
+
+    sys_putc('P');  /* proc:spawn opened */
 
     sys_ipc_msg_t spawn_req, spawn_rep;
     memset(&spawn_req, 0, sizeof(spawn_req));
@@ -249,13 +263,19 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     int rc = sys_call(proc_spawn_h, &spawn_req, &spawn_rep);
     sys_cap_close(proc_spawn_h);
 
-    if (rc == 0 && spawn_rep.handles[0] != 0)
+    sys_putc('R');  /* procd replied */
+    if (rc == 0 && spawn_rep.handles[0] != 0) {
       watch_cap = spawn_rep.handles[0];
+      sys_putc('W');  /* got watch_cap = spawn succeeded */
+    } else {
+      sys_putc('9');  /* no watch_cap = spawn failed */
+    }
   }
 
 done:
   if (mapped_elf)
     sys_vspace_unmap(self_vspace, TMP_ELF_BASE, TMP_ELF_MAXPAGES);
+  if (elf_cap)       sys_cap_close(elf_cap);
   if (self_vspace)   sys_cap_close(self_vspace);
   if (target_vspace) sys_cap_close(target_vspace);
 

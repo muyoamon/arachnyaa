@@ -34,5 +34,6 @@ void fb_init(void);
 void fb_put(uint8_t x, uint8_t y, char c, uint8_t attr);
 void fb_clear(uint8_t attr);
 void fb_blit(const uint16_t cells[FB_ROWS][FB_COLS]);
+void fb_set_cursor(uint8_t x, uint8_t y);
 
 #endif /* TTYD_FB_H_ */

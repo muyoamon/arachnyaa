@@ -1,7 +1,9 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include "syscall.h"
 #include "string.h"
+#include "bootmod.h"
 
 /*
  * Pre-installed caps at fixed indices (kernel installs before first reschedule):
@@ -19,26 +21,6 @@
 #define BOOTINFO_SIZE   0x100000u
 #define PAGE_SIZE_U     4096u
 
-/* Multiboot structures (minimal, matching kernel's multiboot_info_t). */
-typedef struct {
-  uint32_t flags;
-  uint32_t mem_lower;
-  uint32_t mem_upper;
-  uint32_t boot_device;
-  uint32_t cmdline;
-  uint32_t mods_count;
-  uint32_t mods_addr;
-} __attribute__((packed)) mb_info_t;
-
-typedef struct {
-  uint32_t mod_start;
-  uint32_t mod_end;
-  uint32_t cmdline;
-  uint32_t pad;
-} __attribute__((packed)) mb_module_t;
-
-#define MB_FLAG_MODS (1u << 3)
-
 /* Boot module table built from the manifest. */
 #define BM_MAX_MODULES  16
 #define BM_OID_BASE     0x1000u   /* object_ids for bm: handles */
@@ -52,6 +34,7 @@ typedef struct {
 
 static bm_module_t bm_modules[BM_MAX_MODULES];
 static uint32_t    bm_module_count;
+static const char *bm_parse_fail_reason;
 
 /* ---- helpers ---- */
 
@@ -82,29 +65,24 @@ static int streq_bytes(const char *buf, size_t len, const char *lit) {
 /* ---- boot manifest parsing ---- */
 
 static void parse_boot_modules(void) {
-  /* Kernel wrote mb_info_phys at physical 0x0 (= BOOTINFO_VADDR offset 0). */
-  uint32_t mb_info_phys = *(volatile uint32_t *)(uintptr_t)BOOTINFO_VADDR;
-  if (mb_info_phys == 0 || mb_info_phys >= BOOTINFO_SIZE) return;
+  /* Kernel wrote a compact boot_mod_table_t at physical 0x0 (= BOOTINFO_VADDR). */
+  const boot_mod_table_t *tbl =
+      (const boot_mod_table_t *)(uintptr_t)BOOTINFO_VADDR;
 
-  const mb_info_t *mb =
-      (const mb_info_t *)(uintptr_t)(BOOTINFO_VADDR + mb_info_phys);
-  if (!(mb->flags & MB_FLAG_MODS) || mb->mods_count == 0) return;
-  if (mb->mods_addr == 0 || mb->mods_addr >= BOOTINFO_SIZE) return;
-
-  const mb_module_t *mods =
-      (const mb_module_t *)(uintptr_t)(BOOTINFO_VADDR + mb->mods_addr);
-
-  uint32_t count = mb->mods_count;
-  if (count > BM_MAX_MODULES) count = BM_MAX_MODULES;
-
-  for (uint32_t i = 0; i < count; i++) {
-    if (mods[i].cmdline == 0 || mods[i].cmdline >= BOOTINFO_SIZE) continue;
-    bm_modules[bm_module_count].name =
-        (const char *)(uintptr_t)(BOOTINFO_VADDR + mods[i].cmdline);
-    bm_modules[bm_module_count].phys_start = mods[i].mod_start;
-    bm_modules[bm_module_count].phys_end   = mods[i].mod_end;
-    bm_module_count++;
+  if (tbl->magic != BOOT_MOD_TABLE_MAGIC) {
+    bm_parse_fail_reason = "bad magic";
+    return;
   }
+
+  uint32_t n = tbl->mod_count;
+  if (n > BM_MAX_MODULES) n = BM_MAX_MODULES;
+
+  for (uint32_t i = 0; i < n; i++) {
+    bm_modules[i].name      = tbl->mods[i].name;
+    bm_modules[i].phys_start = tbl->mods[i].phys_start;
+    bm_modules[i].phys_end   = tbl->mods[i].phys_end;
+  }
+  bm_module_count = n;
 }
 
 static int bm_find_module(const char *name, size_t name_len) {
@@ -128,21 +106,21 @@ static void bind_log_protocol(void) {
 static void bind_bm_protocol(void) {
   static const char protocol[] = "bm";
   sys_ns_bind(protocol, BOOTSTRAP_LOG_HANDLER,
-              KOP_OPEN | KOP_CALL | KOP_CLOSE);
+              KOP_OPEN | KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE);
 }
 
-static void spawn_log_client(void) {
-  sys_proc_arg_t arg;
-  pid_t pid = 0;
-
-  memset(&arg, 0, sizeof(arg));
-  arg.flags = SYS_PROG_F_BOOTMODULE;
-  arg.module_name = "log-client";
-  arg.argv0 = "log-client";
-
-  sys_spawn(&arg, &pid, 0);
-  (void)pid;
-}
+// static void spawn_log_client(void) {
+//   sys_proc_arg_t arg;
+//   pid_t pid = 0;
+//
+//   memset(&arg, 0, sizeof(arg));
+//   arg.flags = SYS_PROG_F_BOOTMODULE;
+//   arg.module_name = "log-client";
+//   arg.argv0 = "log-client";
+//
+//   sys_spawn(&arg, &pid, 0);
+//   (void)pid;
+// }
 
 /* ---- IPC request handlers ---- */
 
@@ -191,7 +169,7 @@ static void handle_bm_open(const sys_ipc_msg_t *req) {
   }
 
   reply.object_id = BM_OID_BASE + (uint64_t)(uint32_t)idx;
-  open_reply.allowed_ops = KOP_CALL | KOP_CLOSE;
+  open_reply.allowed_ops = KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE;
   reply.num_bytes = sizeof(open_reply);
   memcpy(reply.data, &open_reply, sizeof(open_reply));
   sys_reply(&reply);
@@ -264,6 +242,81 @@ static void handle_bm_read(const sys_ipc_msg_t *req) {
   sys_reply(&reply);
 }
 
+/* Called when client does sys_call(bm_handle, {IPC_OP_EXEC}, &rep) with data=argv0
+ * and handles[0..2]=stdio.  Opens elfloader:elf32 and forwards the request. */
+static void handle_bm_exec(const sys_ipc_msg_t *req) {
+  sys_ipc_msg_t reply;
+  memset(&reply, 0, sizeof(reply));
+
+  uint32_t idx = (uint32_t)(req->object_id - BM_OID_BASE);
+  if (idx >= bm_module_count) {
+    sys_reply(&reply);
+    return;
+  }
+
+  uint32_t phys_start = bm_modules[idx].phys_start;
+  uint32_t phys_end   = bm_modules[idx].phys_end;
+  if (phys_end <= phys_start) {
+    sys_reply(&reply);
+    return;
+  }
+
+  size_t num_pages = (phys_end - phys_start + PAGE_SIZE_U - 1) / PAGE_SIZE_U;
+  cap_handle_t page_cap = sys_page_alloc(num_pages, SYS_PAGE_F_FIXED,
+                                         (uintptr_t)phys_start);
+  if (page_cap == 0) {
+    sys_reply(&reply);
+    return;
+  }
+
+  cap_handle_t elf32_h = sys_open("elfloader:elf32", 0);
+  if (elf32_h == 0) {
+    sys_cap_close(page_cap);
+    sys_reply(&reply);
+    return;
+  }
+
+  sys_ipc_msg_t exec_req, exec_rep;
+  memset(&exec_req, 0, sizeof(exec_req));
+  memset(&exec_rep, 0, sizeof(exec_rep));
+  exec_req.opcode      = IPC_OP_EXEC;
+  exec_req.num_handles = 4;
+  exec_req.handles[0]  = req->handles[0]; /* stdin (transferred from caller) */
+  exec_req.handles[1]  = req->handles[1]; /* stdout */
+  exec_req.handles[2]  = req->handles[2]; /* stderr */
+  exec_req.handles[3]  = page_cap;
+
+  if (req->num_bytes > 0) {
+    uint32_t nb = req->num_bytes < 255u ? req->num_bytes : 255u;
+    exec_req.num_bytes = nb;
+    memcpy(exec_req.data, req->data, nb);
+    exec_req.data[nb] = '\0';
+  } else {
+    const char *mod_name = bm_modules[idx].name;
+    size_t name_len = strlen(mod_name);
+    if (name_len > 254u) name_len = 254u;
+    exec_req.num_bytes = (uint32_t)(name_len + 1u);
+    memcpy(exec_req.data, mod_name, name_len + 1u);
+  }
+
+  sys_call(elf32_h, &exec_req, &exec_rep);
+  sys_cap_close(elf32_h);
+  sys_cap_close(page_cap);
+
+  /* Release stdio caps that were transferred to us */
+  for (int i = 0; i < 3; i++) {
+    if (req->handles[i]) sys_cap_close((cap_handle_t)req->handles[i]);
+  }
+
+  if (exec_rep.handles[0] != 0) {
+    reply.num_handles = 1;
+    reply.handles[0]  = exec_rep.handles[0];
+  }
+  sys_reply(&reply);
+  if (reply.num_handles > 0)
+    sys_cap_close(reply.handles[0]); /* transferred by sys_reply */
+}
+
 static void handle_bm_close(const sys_ipc_msg_t *req) {
   (void)req;
   sys_ipc_msg_t reply;
@@ -284,7 +337,6 @@ static void handle_unknown(void) {
 /* ---- server loop ---- */
 
 static void server_loop(void) {
-  dbgwrite("Starting initd server!\n");
   for (;;) {
     sys_ipc_msg_t req;
     int err;
@@ -307,6 +359,7 @@ static void server_loop(void) {
       /* bm: object — dispatch by opcode */
       switch (req.opcode) {
       case IPC_OP_READ:  handle_bm_read(&req);  break;
+      case IPC_OP_EXEC:  handle_bm_exec(&req);  break;
       case IPC_OP_CLOSE: handle_bm_close(&req); break;
       default:           handle_unknown();       break;
       }
@@ -321,6 +374,11 @@ static void server_loop(void) {
     }
   }
 }
+
+void tty_dbglog(cap_handle_t tty_handle, const char* str) {
+  sys_write(tty_handle, str, strlen(str));
+}
+
 
 /* ---- entry point ---- */
 
@@ -339,10 +397,23 @@ void _start(void) {
     parse_boot_modules();
   }
 
-  /* Bind tty: protocol and spawn ttyd before log setup. */
-  cap_handle_t tty_ep = sys_ep_create();
-  sys_ns_bind("tty", tty_ep, KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+  /*
+   * Bind ALL protocols before spawning any service.  Each spawned service
+   * inherits a snapshot of this process's namespace at spawn time; binding
+   * late means later-spawned services (procd, elfloader) are missing entries,
+   * and so is every process they in turn spawn (e.g. the shell via procd).
+   */
+  cap_handle_t tty_ep  = sys_ep_create();
+  cap_handle_t proc_ep = sys_ep_create();
+  cap_handle_t elf_ep  = sys_ep_create();
 
+  sys_ns_bind("tty",       tty_ep,  KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+  sys_ns_bind("proc",      proc_ep, KOP_OPEN | KOP_CALL | KOP_CLOSE);
+  sys_ns_bind("elfloader", elf_ep,  KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
+  bind_log_protocol();
+  bind_bm_protocol();
+
+  /* Now spawn services — each inherits the full namespace above. */
   {
     sys_proc_arg_t tty_arg;
     memset(&tty_arg, 0, sizeof(tty_arg));
@@ -351,6 +422,26 @@ void _start(void) {
     tty_arg.argv0       = "ttyd";
     tty_arg.endpoint    = tty_ep;
     sys_spawn(&tty_arg, NULL, NULL);
+  }
+
+  {
+    sys_proc_arg_t proc_arg;
+    memset(&proc_arg, 0, sizeof(proc_arg));
+    proc_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    proc_arg.module_name = "procd";
+    proc_arg.argv0       = "procd";
+    proc_arg.endpoint    = proc_ep;
+    sys_spawn(&proc_arg, NULL, NULL);
+  }
+
+  {
+    sys_proc_arg_t elf_arg;
+    memset(&elf_arg, 0, sizeof(elf_arg));
+    elf_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    elf_arg.module_name = "elfloader";
+    elf_arg.argv0       = "elfloader";
+    elf_arg.endpoint    = elf_ep;
+    sys_spawn(&elf_arg, NULL, NULL);
   }
 
   /* Obtain a focus handle from ttyd (so initd can switch vterms later). */
@@ -364,41 +455,75 @@ void _start(void) {
     memcpy(focus_req.data, focus_path, focus_req.num_bytes);
     sys_call(tty_ep, &focus_req, &focus_rep);
     cap_handle_t focus_handle = focus_rep.handles[0];
-    (void)focus_handle; /* stored for future focus switching */
+    (void)focus_handle;
   }
 
-  /* Bind proc: protocol and spawn procd. */
+  cap_handle_t g_tty = sys_open("tty:0", 0);
+  if (g_tty == 0)
+    sys_exit(1);
+  tty_dbglog(g_tty, "Hello from tty!\n");
+  // spawn_log_client();
+
+  tty_dbglog(g_tty, "lauching shell\n");
+
+  /* Print module list for debugging (tty is up, output is visible). */
   {
-    cap_handle_t proc_ep = sys_ep_create();
-    sys_ns_bind("proc", proc_ep, KOP_OPEN | KOP_CALL | KOP_CLOSE);
-
-    sys_proc_arg_t proc_arg;
-    memset(&proc_arg, 0, sizeof(proc_arg));
-    proc_arg.flags    = SYS_PROG_F_BOOTMODULE;
-    proc_arg.module_name = "procd";
-    proc_arg.argv0    = "procd";
-    proc_arg.endpoint = proc_ep;
-    sys_spawn(&proc_arg, NULL, NULL);
+    if (bm_parse_fail_reason) {
+      tty_dbglog(g_tty, "bm parse fail: ");
+      tty_dbglog(g_tty, bm_parse_fail_reason);
+      tty_dbglog(g_tty, "\n");
+    }
+    char mcount_buf[4] = { '0' + (char)(bm_module_count / 10),
+                           '0' + (char)(bm_module_count % 10), '\n', '\0' };
+    tty_dbglog(g_tty, "bm_module_count=");
+    tty_dbglog(g_tty, mcount_buf);
+    for (uint32_t mi = 0; mi < bm_module_count; mi++) {
+      tty_dbglog(g_tty, "  mod: ");
+      tty_dbglog(g_tty, bm_modules[mi].name);
+      tty_dbglog(g_tty, "\n");
+    }
   }
 
-  /* Bind elfloader: protocol and spawn elfloader. */
+  /* Spawn shell via elfloader (after all namespace bindings so shell inherits them). */
   {
-    cap_handle_t elf_ep = sys_ep_create();
-    sys_ns_bind("elfloader", elf_ep,
-                KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
-
-    sys_proc_arg_t elf_arg;
-    memset(&elf_arg, 0, sizeof(elf_arg));
-    elf_arg.flags       = SYS_PROG_F_BOOTMODULE;
-    elf_arg.module_name = "elfloader";
-    elf_arg.argv0       = "elfloader";
-    elf_arg.endpoint    = elf_ep;
-    sys_spawn(&elf_arg, NULL, NULL);
+    int shell_idx = bm_find_module("shell", 5);
+    if (shell_idx < 0) {
+      tty_dbglog(g_tty, "shell NOT found in bm!\n");
+    }
+    if (shell_idx >= 0) {
+      tty_dbglog(g_tty, "shell found in bootmodule\n");
+      uint32_t phys_start = bm_modules[shell_idx].phys_start;
+      uint32_t phys_end   = bm_modules[shell_idx].phys_end;
+      if (phys_end > phys_start) {
+        tty_dbglog(g_tty, "allocating pages for shell\n");
+        size_t num_pages =
+            (phys_end - phys_start + PAGE_SIZE_U - 1u) / PAGE_SIZE_U;
+        cap_handle_t shell_page =
+            sys_page_alloc(num_pages, SYS_PAGE_F_FIXED, (uintptr_t)phys_start);
+        if (shell_page != 0) {
+          cap_handle_t elf32_h = sys_open("elfloader:elf32", 0);
+          if (elf32_h != 0) {
+            sys_ipc_msg_t exec_req, exec_rep;
+            memset(&exec_req, 0, sizeof(exec_req));
+            memset(&exec_rep, 0, sizeof(exec_rep));
+            exec_req.opcode      = IPC_OP_EXEC;
+            exec_req.num_handles = 4;
+            exec_req.handles[3]  = shell_page;
+            static const char shell_argv0[] = "shell";
+            exec_req.num_bytes   = sizeof(shell_argv0);
+            memcpy(exec_req.data, shell_argv0, sizeof(shell_argv0));
+            sys_call(elf32_h, &exec_req, &exec_rep);
+            sys_cap_close(elf32_h);
+            if (exec_rep.handles[0] != 0) {
+              sys_cap_close(exec_rep.handles[0]);
+            }
+          }
+          sys_cap_close(shell_page);
+        }
+      }
+    }
   }
 
-  bind_log_protocol();
-  bind_bm_protocol();
-  spawn_log_client();
   server_loop();
   sys_exit(0);
 }

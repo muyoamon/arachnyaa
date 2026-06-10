@@ -66,11 +66,8 @@ int sys_call(cap_handle_t handle, const sys_ipc_msg_t *msg, sys_ipc_msg_t *out) 
   const cap_entry_t *cap = cap_resolve(proc, handle, R_EP_CALL);
   kobj_t *obj = NULL;
   uint64_t obj_id = 0;
-  if (cap) {
+  if (cap && cap->obj->type == KOBJ_ENDPOINT) {
     obj = cap->obj;
-    if (obj->type != KOBJ_ENDPOINT) {
-      return KERR_PERM;
-    }
     kobj_get(obj);
   } else {
     cap = cap_resolve(proc, handle, KOP_CALL);

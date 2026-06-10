@@ -82,8 +82,11 @@ typedef struct {
 
   struct thread *waiting_server;
 
-  uint32_t pending_notify_mask;   /* bitmask: bit N set = IRQ N has a pending notification */
-  uint8_t  notify_data[16];       /* one data byte per IRQ (e.g., scancode for IRQ 1) */
+  uint32_t pending_notify_mask;   /* bitmask: bit N set = IRQ N ring is non-empty */
+#define NOTIFY_RING_SIZE 16
+  uint8_t  notify_ring[16][NOTIFY_RING_SIZE]; /* per-IRQ scancode ring buffers */
+  uint8_t  notify_head[16];
+  uint8_t  notify_tail[16];
 } kobj_endpoint_t;
 
 /*

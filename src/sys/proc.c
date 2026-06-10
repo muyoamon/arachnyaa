@@ -13,9 +13,13 @@
 static void _release_proc_cap(struct kobj *obj) {
   process_t *proc = (process_t *)obj->payload;
   if (!proc) return;
-  if (proc->main)
-    scheduler_remove(proc->main->tid);
-  process_free(proc);
+  proc->has_proc_caps = false;
+  obj->payload = NULL;
+  if (!proc->main) {
+    /* Process already exited; free its struct now. */
+    process_free(proc);
+  }
+  /* If process is still running, thread_free will call process_free on exit. */
 }
 
 static kobj_ops_t _process_ops = {
@@ -28,6 +32,7 @@ static cap_handle_t _install_proc_cap(process_t *parent, process_t *child) {
   obj->type = KOBJ_PROC;
   obj->payload = child;
   obj->ops = &_process_ops;
+  child->has_proc_caps = true;
   cap_rights_t rights = {
     .bits = R_PROC_SIGNAL | R_PROC_CTRL | R_PROC_INSP | R_PROC_WAIT | R_PROC_TRANSFER,
   };
