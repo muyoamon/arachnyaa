@@ -9,6 +9,7 @@
 #include "process/scheduler.h"
 #include "process/thread.h"
 #include "uapi/syscalls.h"
+#include "drivers/tty.h"
 #include <stdint.h>
 #include <sys/ipc.h>
 
@@ -54,8 +55,12 @@ static void umsg_cpy(const ipc_kmsg_t *kmsg, sys_ipc_msg_t *umsg) {
 }
 
 int sys_call(cap_handle_t handle, const sys_ipc_msg_t *msg, sys_ipc_msg_t *out) {
+  tty_writestring("K:in op=");
+  tty_write_hex(msg ? msg->opcode : 0xDEAD);
+  tty_putc('\n');
   int err = ipc_msg_validate(msg);
   if (err) {
+    tty_writestring("K:E0\n");
     return err;
   }
 
@@ -72,16 +77,21 @@ int sys_call(cap_handle_t handle, const sys_ipc_msg_t *msg, sys_ipc_msg_t *out) 
   } else {
     cap = cap_resolve(proc, handle, KOP_CALL);
     if (!cap) {
+      tty_writestring("K:E1 h=");
+      tty_write_hex((uint32_t)handle);
+      tty_putc('\n');
       return KERR_INVAL;
     }
 
     obj = cap->obj;
     if (obj->type != KOBJ_REMOTE) {
+      tty_writestring("K:E2\n");
       return KERR_PERM;
     }
 
     kobj_remote_t *remote = (kobj_remote_t *)obj->payload;
     if (!remote || !remote->endpoint) {
+      tty_writestring("K:E3\n");
       return KERR_INVAL;
     }
 
@@ -93,20 +103,36 @@ int sys_call(cap_handle_t handle, const sys_ipc_msg_t *msg, sys_ipc_msg_t *out) 
 
   ipc_kmsg_t reply = {0};
 
+  tty_writestring("K:pre\n");
   kerror_t kerr = ipc_call(obj, thread, obj_id, &kmsg, &reply);
+  tty_writestring("K:post kerr="); tty_write_hex((uint32_t)kerr); tty_putc('\n');
   if (kerr) {
+    tty_writestring("K:E4\n");
     kobj_put(obj);
     return kerr;
   }
 
   err = ipc_msg_validate((const sys_ipc_msg_t *)&reply);
+  tty_writestring("K:val2="); tty_write_hex((uint32_t)(uint32_t)err); tty_putc('\n');
   if (err) {
+    tty_writestring("K:E5\n");
     kobj_put(obj);
     return err;
   }
 
   if (out != NULL) {
+    /* Diagnostic: read the slots that the user's sys_call wrapper's leave/ret
+     * will use. These sit 0x38 and 0x34 bytes before `out` in VFS's stack.
+     * Print before and after umsg_cpy to see if the kernel corrupts them. */
+    volatile uint32_t *ebp_slot = (volatile uint32_t *)((uint8_t *)out - 0x38);
+    volatile uint32_t *ret_slot = (volatile uint32_t *)((uint8_t *)out - 0x34);
+    tty_writestring("K:out="); tty_write_hex((uint32_t)out); tty_putc('\n');
+    tty_writestring("K:B1="); tty_write_hex(*ebp_slot); tty_putc('\n');
+    tty_writestring("K:B2="); tty_write_hex(*ret_slot); tty_putc('\n');
     umsg_cpy(&reply, out);
+    tty_writestring("K:A1="); tty_write_hex(*ebp_slot); tty_putc('\n');
+    tty_writestring("K:A2="); tty_write_hex(*ret_slot); tty_putc('\n');
+    tty_writestring("K:OK\n");
   }
   kobj_put(obj);
   return KERR_OK;
@@ -135,7 +161,7 @@ int sys_recv(cap_handle_t endpoint_handle, sys_ipc_msg_t *out) {
     if (err != KERR_NOTFOUND) {
       break;
     }
-    thread->state = T_BLOCKED;
+    /* ipc_recv_next already set thread->state = T_BLOCKED inside the lock. */
     scheduler_reschedule();
   } while (err == KERR_NOTFOUND);
 

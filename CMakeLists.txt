@@ -82,6 +82,24 @@ if(TARGET arachnyaa_kernel)
     )
 
     add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/ramfs
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_ramfs>
+          ${ISO_DIR}/boot/ramfs
+        DEPENDS arachnyaa_ramfs
+        COMMENT "Copy arachnyaa_ramfs to ${ISO_DIR}/boot/ramfs"
+    )
+
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/vfs
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_vfs>
+          ${ISO_DIR}/boot/vfs
+        DEPENDS arachnyaa_vfs
+        COMMENT "Copy arachnyaa_vfs to ${ISO_DIR}/boot/vfs"
+    )
+
+    add_custom_command(
         OUTPUT ${ISO_DIR}/boot/shell
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
           $<TARGET_FILE:arachnyaa_shell>
@@ -93,7 +111,7 @@ if(TARGET arachnyaa_kernel)
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/shell
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/ramfs ${ISO_DIR}/boot/vfs ${ISO_DIR}/boot/shell
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )

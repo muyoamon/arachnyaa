@@ -12,4 +12,8 @@ target_compile_options(arachnyaa_elfloader PRIVATE
   -g
 )
 
+target_include_directories(arachnyaa_elfloader PRIVATE
+  ${CMAKE_SOURCE_DIR}/include
+)
+
 target_link_libraries(arachnyaa_elfloader PRIVATE ulib)

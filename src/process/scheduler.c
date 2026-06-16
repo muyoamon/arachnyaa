@@ -80,11 +80,8 @@ void scheduler_yield(void) {
 }
 
 thread_t *scheduler_pick_next(void) {
-  crit_enter();
   rq_t *rq = sched_get_highest_runnable_rq();
-  thread_t *t = rq_pop(rq);
-  crit_exit();
-  return t;
+  return rq_pop(rq);
 }
 
 void scheduler_add(thread_t *t) {
@@ -108,10 +105,14 @@ void scheduler_remove(tid_t tid) {
 void scheduler_switch(thread_t *next) {
   crit_enter();
 
-  if (next == current_thread)
+  if (next == current_thread) {
+    crit_exit();
     return;
-  if (next == NULL)
+  }
+  if (next == NULL) {
+    crit_exit();
     return;
+  }
   thread_t *old_t = current_thread;
   current_thread = next;
   next->state = T_RUNNING;
@@ -119,15 +120,13 @@ void scheduler_switch(thread_t *next) {
 
   if (old_t) {
     if (old_t->proc == next->proc) {
-      // skip table switch
       arch_context_switch(old_t->ctx, current_thread->ctx);
       crit_exit();
+      return;
     }
   }
 
-  // table switch 
   as_load_ptable(next->proc->mm);
-
   arch_context_switch(old_t->ctx, current_thread->ctx);
   crit_exit();
 }

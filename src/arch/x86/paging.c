@@ -200,7 +200,7 @@ static uint64_t user_get_pte(uintptr_t utable, uintptr_t vaddr) {
   return pte;
 }
 
-void page_fault_handler(uint32_t error_code, uint32_t eip) {
+void page_fault_handler(uint32_t error_code, uint32_t eip, uint32_t useresp, uint32_t ebp3) {
   uintptr_t fault_addr = read_cr2();
   bool present = error_code & 0x01;
   bool user = error_code & 0x04;
@@ -239,6 +239,10 @@ void page_fault_handler(uint32_t error_code, uint32_t eip) {
     serial_puts(" pid=");
     serial_puthex((uint32_t)cur->proc->pid);
   }
+  serial_puts(" esp3=");
+  serial_puthex(useresp);
+  serial_puts(" ebp3=");
+  serial_puthex(ebp3);
   if (user) {
     uint64_t pte = user_get_pte(cr3, fault_addr);
     serial_puts(" pte=");

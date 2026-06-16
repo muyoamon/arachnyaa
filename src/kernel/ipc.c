@@ -3,6 +3,7 @@
 #include "kernel/kobj.h"
 #include "kernel/spinlock.h"
 #include "mm/kheap.h"
+#include "process/process.h"
 #include "process/scheduler.h"
 #include "process/thread.h"
 #include <kernel/ipc.h>
@@ -99,15 +100,22 @@ kerror_t ipc_call_enqueue(struct kobj *endpoint, struct thread *client,
   }
   ep->queue_tail = call;
 
+  /* Set client blocked before unlock so ipc_reply_finish can't miss it. */
+  client->state = T_BLOCKED;
+
+  thread_t *server_to_wake = NULL;
   if (ep->waiting_server) {
-    ep->waiting_server->state = T_READY;
-    scheduler_add(ep->waiting_server);
+    server_to_wake = ep->waiting_server;
+    server_to_wake->state = T_READY;
     ep->waiting_server = NULL;
   }
 
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  client->state = T_BLOCKED;
+  /* Add to run queue outside the spinlock (scheduler_add uses crit_enter/exit). */
+  if (server_to_wake)
+    scheduler_add(server_to_wake);
+
   *out_call = call;
   return KERR_OK;
 }
@@ -158,9 +166,11 @@ kerror_t ipc_recv_next(struct kobj *endpoint, struct thread *server,
   ipc_call_t *call = ep->queue_head;
   if (!call) {
     ep->waiting_server = server;
+    /* Set blocked before unlock so ipc_call_enqueue can't set T_READY and
+       then have us overwrite it with T_BLOCKED after the unlock. */
+    server->state = T_BLOCKED;
     spin_unlock_irqrestore(&ep->lock, flags);
 
-    server->state = T_BLOCKED;
     *out_call = NULL;
     return KERR_NOTFOUND;
   }

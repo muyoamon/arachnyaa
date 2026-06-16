@@ -3,7 +3,8 @@
 #include <stdint.h>
 
 static size_t emit_str(char *buf, size_t pos, size_t size, const char *s) {
-  while (*s && pos + 1 < size) buf[pos++] = *s++;
+  const char *p = s;
+  while (*p && pos + 1 < size) buf[pos++] = *p++;
   return pos;
 }
 

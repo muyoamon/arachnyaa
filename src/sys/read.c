@@ -50,7 +50,8 @@ int sys_read(cap_handle_t handle, void *buf, size_t nbytes) {
   ipc_kmsg_t req = {0};
   ipc_kmsg_t reply = {0};
 
-  req.opcode = IPC_OP_READ;
+  req.opcode    = IPC_OP_READ;
+  req.num_bytes = (uint32_t)sizeof(nbytes);
 
   memcpy(req.data, &nbytes, sizeof(nbytes));
 

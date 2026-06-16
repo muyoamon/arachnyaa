@@ -4,6 +4,7 @@
 #include "syscall.h"
 #include "string.h"
 #include "bootmod.h"
+#include "uapi/fs.h"
 
 /*
  * Pre-installed caps at fixed indices (kernel installs before first reschedule):
@@ -107,9 +108,7 @@ static void bind_bm_protocol(void) {
   static const char protocol[] = "bm";
   sys_ns_bind(protocol, BOOTSTRAP_LOG_HANDLER,
               KOP_OPEN | KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE);
-  /* Also bind the default namespace ("") so bare names resolve via bm. */
-  sys_ns_bind("", BOOTSTRAP_LOG_HANDLER,
-              KOP_OPEN | KOP_CALL | KOP_READ | KOP_EXEC | KOP_CLOSE);
+  /* "" binding is done in _start() after vfs_ep is created */
 }
 
 // static void spawn_log_client(void) {
@@ -411,13 +410,18 @@ void _start(void) {
    * late means later-spawned services (procd, elfloader) are missing entries,
    * and so is every process they in turn spawn (e.g. the shell via procd).
    */
-  cap_handle_t tty_ep  = sys_ep_create();
-  cap_handle_t proc_ep = sys_ep_create();
-  cap_handle_t elf_ep  = sys_ep_create();
+  cap_handle_t tty_ep   = sys_ep_create();
+  cap_handle_t proc_ep  = sys_ep_create();
+  cap_handle_t elf_ep   = sys_ep_create();
+  cap_handle_t ramfs_ep = sys_ep_create();
+  cap_handle_t vfs_ep   = sys_ep_create();
 
-  sys_ns_bind("tty",       tty_ep,  KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
-  sys_ns_bind("proc",      proc_ep, KOP_OPEN | KOP_CALL | KOP_CLOSE);
-  sys_ns_bind("elfloader", elf_ep,  KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
+  sys_ns_bind("tty",       tty_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+  sys_ns_bind("proc",      proc_ep,  KOP_OPEN | KOP_CALL | KOP_CLOSE);
+  sys_ns_bind("elfloader", elf_ep,   KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
+  sys_ns_bind("ramfs",     ramfs_ep, KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+  sys_ns_bind("vfs",       vfs_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE | KOP_EXEC);
+  sys_ns_bind("",          vfs_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE | KOP_EXEC);
   bind_log_protocol();
   bind_bm_protocol();
 
@@ -450,6 +454,26 @@ void _start(void) {
     elf_arg.argv0       = "elfloader";
     elf_arg.endpoint    = elf_ep;
     sys_spawn(&elf_arg, NULL, NULL);
+  }
+
+  {
+    sys_proc_arg_t ramfs_arg;
+    memset(&ramfs_arg, 0, sizeof(ramfs_arg));
+    ramfs_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    ramfs_arg.module_name = "ramfs";
+    ramfs_arg.argv0       = "ramfs";
+    ramfs_arg.endpoint    = ramfs_ep;
+    sys_spawn(&ramfs_arg, NULL, NULL);
+  }
+
+  {
+    sys_proc_arg_t vfs_arg;
+    memset(&vfs_arg, 0, sizeof(vfs_arg));
+    vfs_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    vfs_arg.module_name = "vfs";
+    vfs_arg.argv0       = "vfs";
+    vfs_arg.endpoint    = vfs_ep;
+    sys_spawn(&vfs_arg, NULL, NULL);
   }
 
   /* Obtain a focus handle from ttyd (so initd can switch vterms later). */
@@ -490,6 +514,106 @@ void _start(void) {
       tty_dbglog(g_tty, bm_modules[mi].name);
       tty_dbglog(g_tty, "\n");
     }
+  }
+
+  /* Seed /bin in ramfs from boot modules. */
+  tty_dbglog(g_tty, "seeding ramfs /bin\n");
+  {
+    /* Create /bin directory */
+    cap_handle_t root_h = sys_open("ramfs:/", FS_O_DIRECTORY);
+    if (root_h != 0) {
+      sys_ipc_msg_t mkdir_req, mkdir_rep;
+      memset(&mkdir_req, 0, sizeof(mkdir_req));
+      memset(&mkdir_rep, 0, sizeof(mkdir_rep));
+      mkdir_req.opcode    = FS_OP_MKDIR;
+      static const char bin_name[] = "bin";
+      mkdir_req.num_bytes = (uint32_t)(sizeof(bin_name) - 1u);
+      memcpy(mkdir_req.data, bin_name, sizeof(bin_name) - 1u);
+      sys_call(root_h, &mkdir_req, &mkdir_rep);
+      sys_close(root_h);
+    }
+
+    /* Write each boot module ELF into /bin/<name>.
+     * Modules are loaded at physical addresses > 1MB (outside the BOOT_INFO
+     * VMOBJ which only covers [0, 1MB)).  We must map each module's physical
+     * pages at a scratch virtual address before reading them. */
+#define MOD_SEED_VADDR 0x20000000u
+    cap_handle_t seed_vspace = sys_vspace_self();
+
+    for (uint32_t mi = 0; mi < bm_module_count; mi++) {
+      char path[128];
+      static const char bin_prefix[] = "ramfs:/bin/";
+      size_t prefix_len = sizeof(bin_prefix) - 1u;
+      size_t name_len   = strlen(bm_modules[mi].name);
+      if (prefix_len + name_len + 1u > sizeof(path)) continue;
+      memcpy(path, bin_prefix, prefix_len);
+      memcpy(path + prefix_len, bm_modules[mi].name, name_len);
+      path[prefix_len + name_len] = '\0';
+
+      cap_handle_t fh = sys_open(path, FS_O_CREAT | FS_O_WRONLY);
+      if (fh == 0) continue;
+
+      uint32_t phys_start = bm_modules[mi].phys_start;
+      uint32_t size       = bm_modules[mi].phys_end - bm_modules[mi].phys_start;
+      uint32_t npages     = (size + PAGE_SIZE_U - 1u) / PAGE_SIZE_U;
+
+      cap_handle_t mod_cap = sys_page_alloc(npages, SYS_PAGE_F_FIXED,
+                                            (uintptr_t)phys_start);
+      if (mod_cap == 0) { sys_close(fh); continue; }
+
+      sys_vspace_map_args_t margs = {
+        .vspace_cap = seed_vspace,
+        .virt_addr  = MOD_SEED_VADDR,
+        .page_cap   = mod_cap,
+        .prot_flags = VMM_PROT_READ,
+      };
+      if (sys_vspace_map(&margs) != 0) {
+        sys_cap_close(mod_cap);
+        sys_close(fh);
+        continue;
+      }
+
+      const uint8_t *src = (const uint8_t *)MOD_SEED_VADDR;
+      uint32_t done = 0;
+      while (done < size) {
+        uint32_t chunk = (size - done) < 256u ? (size - done) : 256u;
+        int n = sys_write(fh, src + done, chunk);
+        if (n <= 0) break;
+        done += (uint32_t)n;
+      }
+
+      sys_vspace_unmap(seed_vspace, MOD_SEED_VADDR, npages);
+      sys_cap_close(mod_cap);
+      sys_close(fh);
+    }
+  }
+
+  /* Mount ramfs at "/" in VFS */
+  tty_dbglog(g_tty, "mounting ramfs at /\n");
+  {
+    cap_handle_t vfs_ctrl = sys_open("vfs:", 0);
+    if (vfs_ctrl != 0) {
+      sys_ipc_msg_t mount_req, mount_rep;
+      memset(&mount_req, 0, sizeof(mount_req));
+      memset(&mount_rep, 0, sizeof(mount_rep));
+      mount_req.opcode    = FS_OP_MOUNT;
+      fs_mount_req_t mr;
+      memset(&mr, 0, sizeof(mr));
+      static const char mnt_path[]  = "/";
+      static const char mnt_proto[] = "ramfs";
+      memcpy(mr.mount_path,    mnt_path,  sizeof(mnt_path)  - 1u);
+      memcpy(mr.backend_proto, mnt_proto, sizeof(mnt_proto) - 1u);
+      mount_req.num_bytes = sizeof(mr);
+      memcpy(mount_req.data, &mr, sizeof(mr));
+      sys_call(vfs_ctrl, &mount_req, &mount_rep);
+      sys_close(vfs_ctrl);
+    }
+  }
+
+  /* DEBUG PROBE: trigger VFS open for an existing file (exercises success path) */
+  {
+    cap_handle_t probe_h = sys_open("shell", 0);
+    if (probe_h) sys_close(probe_h);
   }
 
   /* Spawn shell via elfloader (after all namespace bindings so shell inherits them). */

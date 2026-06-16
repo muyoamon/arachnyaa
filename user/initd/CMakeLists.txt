@@ -12,6 +12,8 @@ target_compile_options(arachnyaa_init PRIVATE
   -g
 )
 
+target_include_directories(arachnyaa_init PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 target_link_libraries(arachnyaa_init PRIVATE ulib)
 
 if (TARGET arachyaa_init)
