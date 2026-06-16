@@ -610,12 +610,6 @@ void _start(void) {
     }
   }
 
-  /* DEBUG PROBE: trigger VFS open for an existing file (exercises success path) */
-  {
-    cap_handle_t probe_h = sys_open("shell", 0);
-    if (probe_h) sys_close(probe_h);
-  }
-
   /* Spawn shell via elfloader (after all namespace bindings so shell inherits them). */
   {
     int shell_idx = bm_find_module("shell", 5);

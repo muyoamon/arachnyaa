@@ -157,12 +157,10 @@ static void handle_exec(const sys_ipc_msg_t *req) {
   cap_handle_t watch_cap     = 0;
   int mapped_elf = 0;
 
-  sys_putc('X');  /* entered handle_exec */
-
-  if (elf_cap == 0) { sys_putc('1'); goto done; }
+  if (elf_cap == 0) goto done;
 
   self_vspace = sys_vspace_self();
-  if (self_vspace == 0) { sys_putc('2'); goto done; }
+  if (self_vspace == 0) goto done;
 
   /* Map source ELF into our address space for reading. */
   {
@@ -172,11 +170,10 @@ static void handle_exec(const sys_ipc_msg_t *req) {
       .page_cap   = elf_cap,
       .prot_flags = VMM_PROT_READ,
     };
-    if (sys_vspace_map(&ma) != 0) { sys_putc('3'); goto done; }
+    if (sys_vspace_map(&ma) != 0) goto done;
     mapped_elf = 1;
   }
 
-  sys_putc('M');  /* ELF mapped */
   const Elf32_Ehdr *eh = (const Elf32_Ehdr *)TMP_ELF_BASE;
 
   /* Validate ELF magic + class + arch. */
@@ -186,18 +183,14 @@ static void handle_exec(const sys_ipc_msg_t *req) {
       eh->e_version   != EV_CURRENT || eh->e_machine != EM_386 ||
       (eh->e_type != ET_EXEC && eh->e_type != ET_DYN) ||
       eh->e_phentsize != sizeof(Elf32_Phdr)) {
-    sys_putc('4');
     goto done;
   }
 
-  sys_putc('V');  /* ELF validated */
   uint32_t base        = (eh->e_type == ET_DYN) ? USER_ENTRY_BASE : 0u;
   uint32_t entry_point = base + eh->e_entry;
 
   target_vspace = sys_vspace_create();
-  if (target_vspace == 0) { sys_putc('5'); goto done; }
-
-  sys_putc('S');  /* target vspace created */
+  if (target_vspace == 0) goto done;
 
   /* Load each PT_LOAD segment into target_vspace. */
   const Elf32_Phdr *phdrs =
@@ -213,7 +206,7 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     uint32_t npages    = (map_end - map_begin) / PAGE_SIZE_U;
 
     cap_handle_t seg_cap = sys_page_alloc(npages, 0, 0);
-    if (seg_cap == 0) { sys_putc('a'); goto done; }
+    if (seg_cap == 0) goto done;
 
     /* Map into self at TMP_SEG_BASE for writing. */
     sys_vspace_map_args_t self_ma = {
@@ -224,7 +217,6 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     if (sys_vspace_map(&self_ma) != 0) {
       sys_cap_close(seg_cap);
-      sys_putc('b');
       goto done;
     }
 
@@ -249,15 +241,13 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     int rc = sys_vspace_map(&tgt_ma);
     sys_cap_close(seg_cap);
-    if (rc != 0) { sys_putc('c'); goto done; }
-
-    sys_putc('L');  /* segment loaded */
+    if (rc != 0) goto done;
   }
 
   /* Allocate and map user stack in target. */
   {
     cap_handle_t stk = sys_page_alloc(USER_STACK_PAGES, 0, 0);
-    if (stk == 0) { sys_putc('6'); goto done; }
+    if (stk == 0) goto done;
     sys_vspace_map_args_t stk_ma = {
       .vspace_cap = target_vspace,
       .virt_addr  = USER_STACK_BASE,
@@ -266,18 +256,15 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     };
     int rc = sys_vspace_map(&stk_ma);
     sys_cap_close(stk);
-    if (rc != 0) { sys_putc('7'); goto done; }
+    if (rc != 0) goto done;
   }
 
-  sys_putc('K');  /* stack mapped */
   uint32_t user_sp = USER_STACK_TOP - 16u;
 
   /* Call proc:spawn via procd. */
   {
     cap_handle_t proc_spawn_h = sys_open("proc:spawn", 0);
-    if (proc_spawn_h == 0) { sys_putc('8'); goto done; }
-
-    sys_putc('P');  /* proc:spawn opened */
+    if (proc_spawn_h == 0) goto done;
 
     sys_ipc_msg_t spawn_req, spawn_rep;
     memset(&spawn_req, 0, sizeof(spawn_req));
@@ -302,13 +289,8 @@ static void handle_exec(const sys_ipc_msg_t *req) {
     int rc = sys_call(proc_spawn_h, &spawn_req, &spawn_rep);
     sys_cap_close(proc_spawn_h);
 
-    sys_putc('R');  /* procd replied */
-    if (rc == 0 && spawn_rep.handles[0] != 0) {
+    if (rc == 0 && spawn_rep.handles[0] != 0)
       watch_cap = spawn_rep.handles[0];
-      sys_putc('W');  /* got watch_cap = spawn succeeded */
-    } else {
-      sys_putc('9');  /* no watch_cap = spawn failed */
-    }
   }
 
 done:
@@ -347,17 +329,13 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
   uint8_t ehdr_buf[52];
   uint8_t phdr_buf[32 * sizeof(Elf32_Phdr)];
 
-  sys_putc('F');  /* entered handle_exec_fh */
-
-  if (file_h == 0) { sys_putc('1'); goto done; }
+  if (file_h == 0) goto done;
 
   self_vspace = sys_vspace_self();
-  if (self_vspace == 0) { sys_putc('2'); goto done; }
+  if (self_vspace == 0) goto done;
 
   /* Read ELF header (52 bytes; file cursor starts at 0). */
-  if (fh_read_exact(file_h, ehdr_buf, sizeof(ehdr_buf)) != 0) {
-    sys_putc('3'); goto done;
-  }
+  if (fh_read_exact(file_h, ehdr_buf, sizeof(ehdr_buf)) != 0) goto done;
 
   {
     const Elf32_Ehdr *eh = (const Elf32_Ehdr *)ehdr_buf;
@@ -367,23 +345,20 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
         eh->e_version   != EV_CURRENT || eh->e_machine != EM_386 ||
         (eh->e_type != ET_EXEC && eh->e_type != ET_DYN) ||
         eh->e_phentsize != sizeof(Elf32_Phdr)) {
-      sys_putc('4'); goto done;
+      goto done;
     }
 
     uint32_t phdr_bytes = (uint32_t)eh->e_phnum * sizeof(Elf32_Phdr);
-    if (phdr_bytes > sizeof(phdr_buf)) { sys_putc('5'); goto done; }
+    if (phdr_bytes > sizeof(phdr_buf)) goto done;
 
     fh_seek(file_h, (int32_t)eh->e_phoff, FS_SEEK_SET);
-    if (fh_read_exact(file_h, phdr_buf, phdr_bytes) != 0) {
-      sys_putc('6'); goto done;
-    }
+    if (fh_read_exact(file_h, phdr_buf, phdr_bytes) != 0) goto done;
 
-    sys_putc('V');  /* ELF validated, phdrs loaded */
     uint32_t base        = (eh->e_type == ET_DYN) ? USER_ENTRY_BASE : 0u;
     uint32_t entry_point = base + eh->e_entry;
 
     target_vspace = sys_vspace_create();
-    if (target_vspace == 0) { sys_putc('7'); goto done; }
+    if (target_vspace == 0) goto done;
 
     for (uint32_t i = 0; i < eh->e_phnum; i++) {
       const Elf32_Phdr *ph = (const Elf32_Phdr *)(phdr_buf + i * sizeof(Elf32_Phdr));
@@ -395,7 +370,7 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       uint32_t npages    = (map_end - map_begin) / PAGE_SIZE_U;
 
       cap_handle_t seg_cap = sys_page_alloc(npages, 0, 0);
-      if (seg_cap == 0) { sys_putc('a'); goto done; }
+      if (seg_cap == 0) goto done;
 
       sys_vspace_map_args_t self_ma = {
         .vspace_cap = self_vspace,
@@ -404,7 +379,8 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
         .prot_flags = VMM_PROT_READ | VMM_PROT_WRITE,
       };
       if (sys_vspace_map(&self_ma) != 0) {
-        sys_cap_close(seg_cap); sys_putc('b'); goto done;
+        sys_cap_close(seg_cap);
+        goto done;
       }
 
       uint8_t *tmp = (uint8_t *)TMP_SEG_BASE + (seg_va - map_begin);
@@ -412,7 +388,8 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       fh_seek(file_h, (int32_t)ph->p_offset, FS_SEEK_SET);
       if (fh_read_exact(file_h, tmp, ph->p_filesz) != 0) {
         sys_vspace_unmap(self_vspace, TMP_SEG_BASE, npages);
-        sys_cap_close(seg_cap); sys_putc('c'); goto done;
+        sys_cap_close(seg_cap);
+        goto done;
       }
       if (ph->p_memsz > ph->p_filesz)
         memset(tmp + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
@@ -429,15 +406,13 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       };
       int rc = sys_vspace_map(&tgt_ma);
       sys_cap_close(seg_cap);
-      if (rc != 0) { sys_putc('d'); goto done; }
-
-      sys_putc('L');
+      if (rc != 0) goto done;
     }
 
     /* Stack */
     {
       cap_handle_t stk = sys_page_alloc(USER_STACK_PAGES, 0, 0);
-      if (stk == 0) { sys_putc('8'); goto done; }
+      if (stk == 0) goto done;
       sys_vspace_map_args_t stk_ma = {
         .vspace_cap = target_vspace,
         .virt_addr  = USER_STACK_BASE,
@@ -446,17 +421,14 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       };
       int rc = sys_vspace_map(&stk_ma);
       sys_cap_close(stk);
-      if (rc != 0) { sys_putc('9'); goto done; }
+      if (rc != 0) goto done;
     }
 
-    sys_putc('K');
     uint32_t user_sp = USER_STACK_TOP - 16u;
 
     {
       cap_handle_t proc_spawn_h = sys_open("proc:spawn", 0);
-      if (proc_spawn_h == 0) { sys_putc('e'); goto done; }
-
-      sys_putc('P');
+      if (proc_spawn_h == 0) goto done;
 
       sys_ipc_msg_t spawn_req, spawn_rep;
       memset(&spawn_req, 0, sizeof(spawn_req));
@@ -478,13 +450,8 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       int rc = sys_call(proc_spawn_h, &spawn_req, &spawn_rep);
       sys_cap_close(proc_spawn_h);
 
-      sys_putc('R');
-      if (rc == 0 && spawn_rep.handles[0] != 0) {
+      if (rc == 0 && spawn_rep.handles[0] != 0)
         watch_cap = (cap_handle_t)spawn_rep.handles[0];
-        sys_putc('W');
-      } else {
-        sys_putc('f');
-      }
     }
   }  /* end block containing eh/entry_point/base */
 

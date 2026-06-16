@@ -26,22 +26,6 @@
 #include "../ulib/printf.h"
 #include "../../include/uapi/fs.h"
 
-static void dbg_hex(const char *tag, uint32_t v) {
-  const char *p = tag;
-  while (*p) sys_putc(*p++);
-  sys_putc(':');
-  for (int i = 7; i >= 0; i--)
-    sys_putc("0123456789abcdef"[(v >> (i*4)) & 0xf]);
-  sys_putc('\n');
-}
-
-/* Read handle_open's own return address — use only as a macro inside handle_open. */
-#define CHKRA(tag) do { \
-  uint32_t __ra; \
-  __asm__ volatile ("movl 4(%%ebp),%0" : "=r"(__ra)); \
-  dbg_hex((tag), __ra); \
-} while (0)
-
 /* ---- limits ---- */
 #define VFS_MAX_MOUNTS  8
 #define VFS_MAX_OBJECTS 64
@@ -127,32 +111,12 @@ static cap_handle_t vfs_open_backend(const char *abs_path, uint32_t flags) {
 
 /* Stat a backend handle to get file type. Returns FS_TYPE_FILE on error. */
 static uint8_t vfs_stat_type(cap_handle_t bh) {
-  uint32_t ebp_val;
-  __asm__ volatile ("mov %%ebp,%0" : "=r"(ebp_val));
-  dbg_hex("SV", ebp_val);
-
-  /* print [EBP+0] (saved EBP) and [EBP+4] (return addr) */
-  uint32_t saved_ebp = *(volatile uint32_t *)(uintptr_t)(ebp_val);
-  uint32_t ret_addr  = *(volatile uint32_t *)(uintptr_t)(ebp_val + 4);
-  dbg_hex("SE", saved_ebp);
-  dbg_hex("SR", ret_addr);
-
   sys_ipc_msg_t stat_req, stat_rep;
   memset(&stat_req, 0, sizeof(stat_req));
   memset(&stat_rep, 0, sizeof(stat_rep));
   stat_req.opcode = FS_OP_STAT;
 
-  /* Check ret addr again before sys_call */
-  ret_addr = *(volatile uint32_t *)(uintptr_t)(ebp_val + 4);
-  dbg_hex("SB", ret_addr);
-
   int rc = (int)sys_call(bh, &stat_req, &stat_rep);
-  sys_putc('P'); sys_putc('\n'); /* SP: if this prints, sys_call ret was correct */
-
-  /* Check ret addr after sys_call */
-  ret_addr = *(volatile uint32_t *)(uintptr_t)(ebp_val + 4);
-  dbg_hex("SA", ret_addr);
-
   if (rc != 0) return FS_TYPE_FILE;
   if (stat_rep.num_bytes < sizeof(fs_stat_t)) return FS_TYPE_FILE;
   fs_stat_t st;
@@ -167,7 +131,6 @@ static void handle_open(const sys_ipc_msg_t *req) {
   sys_open_reply_t oreply;
   memset(&reply,  0, sizeof(reply));
   memset(&oreply, 0, sizeof(oreply));
-  CHKRA("R0");
 
   /* data = "vfs:<path>" */
   const char *data = (const char *)req->data;
@@ -185,11 +148,9 @@ static void handle_open(const sys_ipc_msg_t *req) {
   } else {
     sys_reply(&reply); return;
   }
-  CHKRA("R1");
 
   /* Empty path → control handle. */
   if (path_len == 0) {
-    CHKRA("R2");
     oreply.allowed_ops  = KOP_CALL | KOP_CLOSE;
     reply.object_id     = VFS_CTRL_OID;
     reply.num_bytes     = sizeof(oreply);
@@ -205,22 +166,18 @@ static void handle_open(const sys_ipc_msg_t *req) {
     size_t copy_len = path_len < (sizeof(abs_path) - 1u) ? path_len : (sizeof(abs_path) - 1u);
     memcpy(abs_path, path, copy_len);
     abs_path[copy_len] = '\0';
-    CHKRA("R3");
   } else {
     /* Bare name → try exec search path directories. */
     cap_handle_t found_bh = 0;
     for (uint32_t i = 0; g_exec_paths[i] != NULL; i++) {
       snprintf(abs_path, sizeof(abs_path), "%s/", g_exec_paths[i]);
-      CHKRA("RS");
       size_t base_len = strlen(abs_path);
       size_t name_len = path_len < (sizeof(abs_path) - base_len - 1u)
                         ? path_len : (sizeof(abs_path) - base_len - 1u);
       memcpy(abs_path + base_len, path, name_len);
-      CHKRA("RM");
       abs_path[base_len + name_len] = '\0';
 
       found_bh = vfs_open_backend(abs_path, req->flags);
-      CHKRA("RB");
       if (found_bh) goto got_bh;
     }
     sys_reply(&reply);
@@ -228,9 +185,7 @@ static void handle_open(const sys_ipc_msg_t *req) {
 
   got_bh:;
     uint8_t  ftype = vfs_stat_type(found_bh);
-    CHKRA("RT");
     uint32_t slot  = obj_alloc(found_bh);
-    CHKRA("RO");
     if (slot == (uint32_t)-1) { sys_close(found_bh); sys_reply(&reply); return; }
 
     oreply.allowed_ops = (ftype == FS_TYPE_DIR)
@@ -238,7 +193,6 @@ static void handle_open(const sys_ipc_msg_t *req) {
                          : (KOP_READ | KOP_WRITE | KOP_CALL | KOP_CLOSE | KOP_EXEC);
     reply.object_id = OBJ_TO_OID(slot);
     reply.num_bytes = sizeof(oreply);
-    CHKRA("RF");
     memcpy(reply.data, &oreply, sizeof(oreply));
     sys_reply(&reply);
     return;
@@ -246,13 +200,10 @@ static void handle_open(const sys_ipc_msg_t *req) {
 
   /* Absolute path: open via mount table. */
   cap_handle_t bh = vfs_open_backend(abs_path, req->flags);
-  CHKRA("RA");
   if (!bh) { sys_reply(&reply); return; }
 
   uint8_t  ftype = vfs_stat_type(bh);
-  CHKRA("RT");
   uint32_t slot  = obj_alloc(bh);
-  CHKRA("RO");
   if (slot == (uint32_t)-1) { sys_close(bh); sys_reply(&reply); return; }
 
   oreply.allowed_ops = (ftype == FS_TYPE_DIR)
@@ -260,7 +211,6 @@ static void handle_open(const sys_ipc_msg_t *req) {
                        : (KOP_READ | KOP_WRITE | KOP_CALL | KOP_CLOSE | KOP_EXEC);
   reply.object_id = OBJ_TO_OID(slot);
   reply.num_bytes = sizeof(oreply);
-  CHKRA("RF");
   memcpy(reply.data, &oreply, sizeof(oreply));
   sys_reply(&reply);
 }
@@ -331,7 +281,6 @@ static void handle_close(const sys_ipc_msg_t *req) {
 /* ---- IPC_OP_EXEC ---- */
 
 static void handle_exec(const sys_ipc_msg_t *req) {
-  dbg_hex("REQ", (uint32_t)(uintptr_t)req);
   sys_ipc_msg_t reply;
   memset(&reply, 0, sizeof(reply));
 
@@ -355,7 +304,6 @@ static void handle_exec(const sys_ipc_msg_t *req) {
   exec_fwd.handles[3]  = g_objects[slot].bh;
 
   /* Forward argv0. */
-  dbg_hex("NBP", (uint32_t)(uintptr_t)req);
   uint32_t nb = req->num_bytes < 255u ? req->num_bytes : 255u;
   exec_fwd.num_bytes = nb;
   if (nb > 0) memcpy(exec_fwd.data, req->data, nb);
@@ -449,49 +397,33 @@ static void handle_umount(const sys_ipc_msg_t *req) {
 void _start(void) {
   cap_handle_t my_ep = sys_bootstrap_cap(0);
 
-  sys_putc('V'); sys_putc('F'); sys_putc('S'); sys_putc('\n');  /* startup marker */
-
   memset(g_mounts,  0, sizeof(g_mounts));
   memset(g_objects, 0, sizeof(g_objects));
 
   for (;;) {
-    sys_putc('L'); sys_putc('\n');  /* loop top */
-    { uint32_t _ebp; __asm__ volatile ("mov %%ebp,%0" : "=r"(_ebp)); dbg_hex("EL", _ebp); }
     sys_ipc_msg_t req;
     memset(&req, 0, sizeof(req));
-    sys_putc('W'); sys_putc('\n');  /* before sys_recv */
-    if (sys_recv(my_ep, &req) != 0) { sys_putc('E'); sys_putc('\n'); continue; }
-    sys_putc('G'); sys_putc('\n');  /* got message */
-    dbg_hex("OP", req.opcode);
+    if (sys_recv(my_ep, &req) != 0) continue;
 
     switch (req.opcode) {
-    case IPC_OP_OPEN:  handle_open(&req);  sys_putc('o'); sys_putc('\n'); break;
-    case IPC_OP_READ:  handle_read(&req);  sys_putc('r'); sys_putc('\n'); break;
-    case IPC_OP_WRITE: handle_write(&req); sys_putc('w'); sys_putc('\n'); break;
-    case IPC_OP_CLOSE: handle_close(&req); sys_putc('c'); sys_putc('\n'); break;
-    case IPC_OP_EXEC: {
-      uint32_t ebp_val;
-      __asm__ volatile ("mov %%ebp, %0" : "=r"(ebp_val));
-      dbg_hex("EBP", ebp_val);
-      dbg_hex("ADDR", (uint32_t)(uintptr_t)&req);
-      handle_exec(&req);
-      sys_putc('x'); sys_putc('\n');
-      break;
-    }
+    case IPC_OP_OPEN:  handle_open(&req);  break;
+    case IPC_OP_READ:  handle_read(&req);  break;
+    case IPC_OP_WRITE: handle_write(&req); break;
+    case IPC_OP_CLOSE: handle_close(&req); break;
+    case IPC_OP_EXEC:  handle_exec(&req);  break;
 
     default:
       /* Control-object ops or forwarded FS ops. */
       if (req.object_id == VFS_CTRL_OID) {
         switch (req.opcode) {
-        case FS_OP_MOUNT:  handle_mount(&req);  sys_putc('m'); sys_putc('\n'); break;
-        case FS_OP_UMOUNT: handle_umount(&req); sys_putc('u'); sys_putc('\n'); break;
-        default: { sys_ipc_msg_t r; memset(&r,0,sizeof(r)); sys_reply(&r); sys_putc('d'); sys_putc('\n'); } break;
+        case FS_OP_MOUNT:  handle_mount(&req);  break;
+        case FS_OP_UMOUNT: handle_umount(&req); break;
+        default: { sys_ipc_msg_t r; memset(&r,0,sizeof(r)); sys_reply(&r); } break;
         }
       } else {
-        handle_fs_op(&req); sys_putc('f'); sys_putc('\n');
+        handle_fs_op(&req);
       }
       break;
     }
-    sys_putc('Z'); sys_putc('\n');  /* loop bottom */
   }
 }

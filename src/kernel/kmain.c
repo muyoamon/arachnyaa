@@ -19,7 +19,6 @@
 #include <mm/kheap.h>
 #include <mm/vmm.h>
 #include <stdint.h>
-
 // --- External Functions (Prototypes - should be in proper headers) ---
 // extern void gdt_install(void);
 extern void idt_install(void);
@@ -195,8 +194,8 @@ void kmain(uint32_t magic, uint32_t mb_info_addr) {
   if (multiboot_find_module(mb_info, "initd", &initd)) {
     tty_writestring("initd module found! Attempt to load binary...\n");
 
-    // map initd image identitily
-    vmm_map(initd.mod_start, initd.mod_start, (initd.mod_end - initd.mod_start - 1) / PAGE_SIZE + 1 , PTE_PRESENT);
+    uint32_t count = (initd.mod_end - initd.mod_start - 1) / PAGE_SIZE + 1;
+    vmm_map(initd.mod_start, initd.mod_start, count, PTE_PRESENT);
 
     elf_image_t img = {.bytes = (void *)(uintptr_t)(initd.mod_start),
                        .size = initd.mod_end - initd.mod_start};

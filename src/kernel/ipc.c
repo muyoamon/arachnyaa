@@ -204,17 +204,24 @@ kerror_t ipc_reply_finish(ipc_call_t *call, const ipc_kmsg_t *reply) {
   call->state = IPC_CALL_REPLIED;
 
   if (call->client_thread && call->client_thread->state == T_BLOCKED) {
+    /* Clear active_call BEFORE scheduler_add: scheduler_add calls crit_exit()
+       which re-enables IRQs.  The client can then run, copy the reply, and call
+       ipc_call_destroy(call) — freeing call — before we return here.  Any access
+       to call->server_thread after that point is a use-after-free. */
+    if (call->server_thread) {
+      call->server_thread->active_call = NULL;
+      call->server_thread = NULL;
+    }
     call->client_thread->state = T_READY;
     scheduler_add(call->client_thread);
   } else if (!call->client_thread) {
-    /* Notification call: no client, free immediately after clearing server state */
+    /* Notification call: no client, free immediately after clearing server state. */
     if (call->server_thread) call->server_thread->active_call = NULL;
     ipc_call_destroy(call);
     return KERR_OK;
-  }
-
-  if (call->server_thread) {
-    call->server_thread->active_call = NULL;
+  } else {
+    /* Client exists but isn't blocked (unexpected). Still clear active_call. */
+    if (call->server_thread) call->server_thread->active_call = NULL;
   }
 
   return KERR_OK;

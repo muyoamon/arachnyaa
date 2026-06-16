@@ -566,11 +566,6 @@ void _start(void) {
     memset(&req, 0, sizeof(req));
     if (sys_recv(my_ep, &req) != 0) continue;
 
-    sys_putc('r'); sys_putc('=');
-    { uint32_t op = req.opcode; char buf[9]; int i=7; buf[8]=0;
-      while(i>=0){buf[i--]="0123456789abcdef"[op&0xF];op>>=4;} sys_putc(buf[0]); }
-    sys_putc('\n');
-
     switch (req.opcode) {
     case IPC_OP_OPEN:  handle_open(&req);  break;
     case IPC_OP_READ:  handle_read(&req);  break;
@@ -581,7 +576,7 @@ void _start(void) {
       /* Custom FS ops dispatched by opcode, regardless of object_id */
       switch (req.opcode) {
       case FS_OP_SEEK:     handle_seek(&req);     break;
-      case FS_OP_STAT:     sys_putc('!'); handle_stat(&req);     break;
+      case FS_OP_STAT:     handle_stat(&req);     break;
       case FS_OP_READDIR:  handle_readdir(&req);  break;
       case FS_OP_MKDIR:    handle_mkdir(&req);    break;
       case FS_OP_UNLINK:   handle_unlink(&req);   break;
