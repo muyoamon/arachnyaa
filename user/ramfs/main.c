@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include "../ulib/syscall.h"
 #include "../ulib/string.h"
-#include "../../include/uapi/fs.h"
+#include "../vfs/fs_proto.h"
 
 /* ---- limits ---- */
 #define RAMFS_MAX_INODES  128

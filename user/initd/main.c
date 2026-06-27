@@ -4,7 +4,7 @@
 #include "syscall.h"
 #include "string.h"
 #include "bootmod.h"
-#include "uapi/fs.h"
+#include "../vfs/fs_proto.h"
 
 /*
  * Pre-installed caps at fixed indices (kernel installs before first reschedule):

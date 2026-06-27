@@ -20,7 +20,7 @@
 #include <stddef.h>
 #include "syscall.h"
 #include "string.h"
-#include "uapi/fs.h"
+#include "../vfs/fs_proto.h"
 
 /* ---- ELF32 definitions ---- */
 #define EI_NIDENT   16

@@ -24,7 +24,7 @@
 #include "../ulib/syscall.h"
 #include "../ulib/string.h"
 #include "../ulib/printf.h"
-#include "../../include/uapi/fs.h"
+#include "fs_proto.h"
 
 /* ---- limits ---- */
 #define VFS_MAX_MOUNTS  8
