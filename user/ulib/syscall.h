@@ -320,4 +320,8 @@ static inline cap_handle_t sys_bootstrap_cap(uint32_t slot) {
   return _sc1(SYS_BOOTSTRAP_CAP, slot);
 }
 
+static inline cap_handle_t sys_cap_get(uint32_t slot) {
+  return _sc1(SYS_BOOTSTRAP_CAP, slot);
+}
+
 #endif /* ULIB_SYSCALL_H_ */

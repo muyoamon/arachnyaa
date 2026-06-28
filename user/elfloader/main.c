@@ -21,6 +21,7 @@
 #include "syscall.h"
 #include "string.h"
 #include "../vfs/fs_proto.h"
+#include "../procd/proc_args.h"
 
 /* ---- ELF32 definitions ---- */
 #define EI_NIDENT   16
@@ -75,6 +76,7 @@ typedef struct {
 #define TMP_ELF_BASE      0x40000000u  /* source ELF read here; max 1MB = 256 pages */
 #define TMP_ELF_MAXPAGES  256u
 #define TMP_SEG_BASE      0x50000000u  /* one target segment at a time */
+#define TMP_STACK_BASE    0x61000000u  /* temporary window to write PAB onto child stack */
 
 #define USER_STACK_TOP    0xBFDFF000u
 #define USER_STACK_PAGES  4u
@@ -311,6 +313,97 @@ done:
   if (watch_cap) sys_cap_close(watch_cap);  /* transferred by sys_reply */
 }
 
+/* ---- PAB writer ---- */
+
+/*
+ * Write a Process Args Block onto a child's stack buffer.
+ *
+ * buf        — pointer to stack pages in elfloader's vspace (TMP_STACK_BASE)
+ * buf_size   — total stack size in bytes (USER_STACK_SIZE)
+ * stack_base — first virtual address of the stack in the child's vspace
+ * exec_data  — raw sys_ipc_msg_t.data from the exec message (proc_exec_args_t)
+ * exec_nbytes — num_bytes from the exec message
+ *
+ * Returns the byte offset from buf where argc is written; the child's initial
+ * esp = stack_base + returned offset.  Returns buf_size on failure.
+ */
+static uint32_t pab_write(uint8_t *buf, uint32_t buf_size, uint32_t stack_base,
+                          const uint8_t *exec_data, uint32_t exec_nbytes) {
+  const uint8_t *argv_blob = NULL, *envp_blob = NULL;
+  uint32_t argv_bytes = 0, envp_bytes = 0;
+
+  if (exec_nbytes >= PROC_EXEC_ARGS_HDR_SIZE) {
+    const proc_exec_args_t *pea = (const proc_exec_args_t *)exec_data;
+    uint32_t ab = pea->argv_bytes, eb = pea->envp_bytes;
+    if (ab + eb <= PROC_EXEC_ARGS_BLOB_MAX &&
+        PROC_EXEC_ARGS_HDR_SIZE + ab + eb <= exec_nbytes) {
+      argv_bytes = ab; envp_bytes = eb;
+      argv_blob  = pea->blobs;
+      envp_blob  = pea->blobs + ab;
+    }
+  }
+
+  /* Count args by counting null terminators. */
+  uint32_t argc = 0, envc = 0;
+  for (uint32_t i = 0; i < argv_bytes; i++) if (argv_blob[i] == '\0') argc++;
+  for (uint32_t i = 0; i < envp_bytes; i++) if (envp_blob[i] == '\0') envc++;
+
+  uint32_t str_size  = argv_bytes + envp_bytes;
+  uint32_t auxv_size = 3u * (uint32_t)sizeof(proc_auxv_t);
+  uint32_t envp_size = (envc + 1u) * 4u;
+  uint32_t argv_size = (argc + 1u) * 4u;
+  uint32_t argc_size = 4u;
+
+  /* Strings go at the top (high end); structured data is placed below, 4-byte aligned. */
+  if (str_size > buf_size) return buf_size;
+  uint32_t str_off   = buf_size - str_size;
+  uint32_t struct_top = str_off & ~3u;
+
+  if (auxv_size + envp_size + argv_size + argc_size > struct_top) return buf_size;
+
+  /* Copy strings. */
+  if (argv_bytes > 0) memcpy(buf + str_off,              argv_blob, argv_bytes);
+  if (envp_bytes > 0) memcpy(buf + str_off + argv_bytes, envp_blob, envp_bytes);
+
+  /* Build structured area downward from struct_top. */
+  uint32_t off = struct_top;
+
+  off -= auxv_size;
+  proc_auxv_t *auxv = (proc_auxv_t *)(buf + off);
+  auxv[0].type = AT_CAPS_BASE;  auxv[0].value = 0u;
+  auxv[1].type = AT_CAPS_COUNT; auxv[1].value = 3u;
+  auxv[2].type = AT_NULL;       auxv[2].value = 0u;
+
+  off -= envp_size;
+  uint32_t *envp_ptrs = (uint32_t *)(buf + off);
+  {
+    uint32_t soff = argv_bytes;
+    for (uint32_t i = 0; i < envc; i++) {
+      envp_ptrs[i] = stack_base + str_off + soff;
+      while (soff < str_size && buf[str_off + soff] != '\0') soff++;
+      soff++;
+    }
+    envp_ptrs[envc] = 0u;
+  }
+
+  off -= argv_size;
+  uint32_t *argv_ptrs = (uint32_t *)(buf + off);
+  {
+    uint32_t soff = 0u;
+    for (uint32_t i = 0; i < argc; i++) {
+      argv_ptrs[i] = stack_base + str_off + soff;
+      while (soff < argv_bytes && buf[str_off + soff] != '\0') soff++;
+      soff++;
+    }
+    argv_ptrs[argc] = 0u;
+  }
+
+  off -= argc_size;
+  *(uint32_t *)(buf + off) = argc;
+
+  return off;
+}
+
 /* ---- EXEC-FH handler (reads ELF via file handle, no page-cap) ---- */
 
 static void handle_exec_fh(const sys_ipc_msg_t *req) {
@@ -319,7 +412,13 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
   cap_handle_t stderr_cap = (cap_handle_t)req->handles[2];
   cap_handle_t file_h     = (cap_handle_t)req->handles[3];
 
-  const char *argv0 = (req->num_bytes > 0) ? (const char *)req->data : "elf";
+  const char *argv0;
+  if (req->num_bytes >= PROC_EXEC_ARGS_HDR_SIZE) {
+    const proc_exec_args_t *pea = (const proc_exec_args_t *)req->data;
+    argv0 = (pea->argv_bytes > 0) ? (const char *)pea->blobs : "elf";
+  } else {
+    argv0 = (req->num_bytes > 0) ? (const char *)req->data : "elf";
+  }
 
   cap_handle_t self_vspace   = 0;
   cap_handle_t target_vspace = 0;
@@ -409,22 +508,37 @@ static void handle_exec_fh(const sys_ipc_msg_t *req) {
       if (rc != 0) goto done;
     }
 
-    /* Stack */
+    /* Stack — map into target vspace (permanent) and self (temporary to write PAB). */
+    uint32_t user_sp = 0;
     {
       cap_handle_t stk = sys_page_alloc(USER_STACK_PAGES, 0, 0);
       if (stk == 0) goto done;
-      sys_vspace_map_args_t stk_ma = {
+
+      sys_vspace_map_args_t stk_tgt = {
         .vspace_cap = target_vspace,
         .virt_addr  = USER_STACK_BASE,
         .page_cap   = stk,
         .prot_flags = VMM_PROT_READ | VMM_PROT_WRITE,
       };
-      int rc = sys_vspace_map(&stk_ma);
-      sys_cap_close(stk);
-      if (rc != 0) goto done;
-    }
+      if (sys_vspace_map(&stk_tgt) != 0) { sys_cap_close(stk); goto done; }
 
-    uint32_t user_sp = USER_STACK_TOP - 16u;
+      sys_vspace_map_args_t stk_tmp = {
+        .vspace_cap = self_vspace,
+        .virt_addr  = TMP_STACK_BASE,
+        .page_cap   = stk,
+        .prot_flags = VMM_PROT_READ | VMM_PROT_WRITE,
+      };
+      if (sys_vspace_map(&stk_tmp) != 0) { sys_cap_close(stk); goto done; }
+      sys_cap_close(stk);
+
+      uint32_t argc_off = pab_write(
+          (uint8_t *)TMP_STACK_BASE, USER_STACK_SIZE, USER_STACK_BASE,
+          req->data, req->num_bytes);
+      sys_vspace_unmap(self_vspace, TMP_STACK_BASE, USER_STACK_PAGES);
+
+      if (argc_off >= USER_STACK_SIZE) goto done;
+      user_sp = USER_STACK_BASE + argc_off;
+    }
 
     {
       cap_handle_t proc_spawn_h = sys_open("proc:spawn", 0);

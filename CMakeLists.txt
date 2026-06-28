@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
-project(arachnyaa C ASM_NASM)
+project(arachnyaa C ASM ASM_NASM)
 
+enable_language(ASM)
 enable_language(ASM_NASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -108,10 +109,19 @@ if(TARGET arachnyaa_kernel)
         COMMENT "Copy arachnyaa_shell to ${ISO_DIR}/boot/shell"
     )
 
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/echo
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_echo>
+          ${ISO_DIR}/boot/echo
+        DEPENDS arachnyaa_echo
+        COMMENT "Copy arachnyaa_echo to ${ISO_DIR}/boot/echo"
+    )
+
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/ramfs ${ISO_DIR}/boot/vfs ${ISO_DIR}/boot/shell
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/ramfs ${ISO_DIR}/boot/vfs ${ISO_DIR}/boot/shell ${ISO_DIR}/boot/echo
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )

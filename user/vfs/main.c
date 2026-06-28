@@ -303,8 +303,8 @@ static void handle_exec(const sys_ipc_msg_t *req) {
   exec_fwd.handles[2]  = req->handles[2]; /* stderr */
   exec_fwd.handles[3]  = g_objects[slot].bh;
 
-  /* Forward argv0. */
-  uint32_t nb = req->num_bytes < 255u ? req->num_bytes : 255u;
+  /* Forward exec args blob verbatim. */
+  uint32_t nb = req->num_bytes <= 256u ? req->num_bytes : 256u;
   exec_fwd.num_bytes = nb;
   if (nb > 0) memcpy(exec_fwd.data, req->data, nb);
 

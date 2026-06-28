@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include "../ulib/syscall.h"
 #include "../ulib/string.h"
+#include "../procd/proc_args.h"
 
 #define LINE_MAX   240
 #define MAX_TOKENS  16
@@ -159,9 +160,21 @@ void _start(void) {
     exec_req.handles[1]  = g_tty;
     exec_req.handles[2]  = g_tty;
 
-    size_t argv0_len = strlen(tokens[0]) + 1u;
-    exec_req.num_bytes = (uint32_t)argv0_len;
-    memcpy(exec_req.data, tokens[0], argv0_len);
+    /* Pack argv into proc_exec_args_t format. */
+    {
+      proc_exec_args_t *pea = (proc_exec_args_t *)exec_req.data;
+      uint8_t *blob = pea->blobs;
+      uint32_t blob_used = 0;
+      for (int i = 0; i < tc; i++) {
+        size_t tlen = strlen(tokens[i]) + 1u;
+        if (blob_used + tlen > PROC_EXEC_ARGS_BLOB_MAX) break;
+        memcpy(blob + blob_used, tokens[i], tlen);
+        blob_used += (uint32_t)tlen;
+      }
+      pea->argv_bytes = blob_used;
+      pea->envp_bytes = 0;
+      exec_req.num_bytes = PROC_EXEC_ARGS_HDR_SIZE + blob_used;
+    }
 
     int rc = sys_call(exec_h, &exec_req, &exec_rep);
     sys_cap_close(exec_h);

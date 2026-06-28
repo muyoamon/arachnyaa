@@ -1,4 +1,4 @@
-add_library(ulib STATIC string.c printf.c)
+add_library(ulib STATIC string.c printf.c fd.c)
 
 target_compile_options(ulib PRIVATE
   -ffreestanding
