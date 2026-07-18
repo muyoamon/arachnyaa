@@ -37,6 +37,7 @@ enum {
   SYS_DEFER_CALL    = 0x19,
   SYS_REPLY_TO      = 0x1A,
   SYS_BOOTSTRAP_CAP = 0x1B,
+  SYS_PIPE          = 0x1C,
 };
 
 /* ---- protocol operation rights ---- */
@@ -322,6 +323,18 @@ static inline cap_handle_t sys_bootstrap_cap(uint32_t slot) {
 
 static inline cap_handle_t sys_cap_get(uint32_t slot) {
   return _sc1(SYS_BOOTSTRAP_CAP, slot);
+}
+
+typedef struct {
+  cap_handle_t read_cap;
+  cap_handle_t write_cap;
+} sys_pipe_result_t;
+
+static inline int sys_pipe(cap_handle_t *read_cap, cap_handle_t *write_cap) {
+  sys_pipe_result_t res = {0, 0};
+  int err = (int)_sc1(SYS_PIPE, (uint32_t)(uintptr_t)&res);
+  if (err == 0) { *read_cap = res.read_cap; *write_cap = res.write_cap; }
+  return err;
 }
 
 #endif /* ULIB_SYSCALL_H_ */

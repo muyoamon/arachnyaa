@@ -3,6 +3,7 @@
 #include "kernel/error.h"
 #include "kernel/ipc.h"
 #include "kernel/kobj.h"
+#include "kernel/pipe.h"
 #include "kernel/protocol.h"
 #include "process/process.h"
 #include "process/scheduler.h"
@@ -35,10 +36,12 @@ int sys_read(cap_handle_t handle, void *buf, size_t nbytes) {
     return -KERR_INVAL;
   }
 
+  if (obj->type == KOBJ_PIPE)
+    return pipe_read((pipe_buf_t *)obj->payload, buf, (uint32_t)nbytes);
+
   if (obj->type != KOBJ_REMOTE) {
     return -KERR_UNSUPPORTED;
   }
-
 
   kobj_remote_t *remote = (kobj_remote_t *)obj->payload;
 

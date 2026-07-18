@@ -11,6 +11,7 @@ set(KERNEL_CORE_SOURCES
     namespace.c
     bootstrap.c
     ipc.c
+    pipe.c
 )
 
 

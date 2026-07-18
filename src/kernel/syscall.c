@@ -6,6 +6,7 @@
 #include "sys/ipc.h"
 #include "sys/irq.h"
 #include "sys/namespace.h"
+#include "sys/pipe.h"
 #include "sys/proc.h"
 #include "sys/read.h"
 #include "sys/vspace.h"
@@ -89,6 +90,8 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
     return sys_reply_to((uint32_t)a0, (const sys_ipc_msg_t *)a1);
   case SYS_BOOTSTRAP_CAP:
     return sys_bootstrap_cap((uint32_t)a0);
+  case SYS_PIPE:
+    return sys_pipe((sys_pipe_result_t *)a0);
 
   default:
     return -1;

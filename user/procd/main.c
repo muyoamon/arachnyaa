@@ -97,6 +97,12 @@ static void handle_spawn_call(const sys_ipc_msg_t *req) {
     return;
   }
 
+  /* Release handles received from elfloader — child has its own copies now. */
+  if (vspace_cap)       sys_cap_close(vspace_cap);
+  if (arg.stdio[0])     sys_cap_close(arg.stdio[0]);
+  if (arg.stdio[1])     sys_cap_close(arg.stdio[1]);
+  if (arg.stdio[2])     sys_cap_close(arg.stdio[2]);
+
   /* Restrict to wait-only before handing to caller. */
   cap_handle_t watch_cap = sys_cap_restrict(proc_cap, R_PROC_WAIT);
   sys_cap_close(proc_cap);

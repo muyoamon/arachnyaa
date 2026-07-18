@@ -34,6 +34,7 @@ enum {
   SYS_DEFER_CALL    = 0x19,
   SYS_REPLY_TO      = 0x1A,
   SYS_BOOTSTRAP_CAP = 0x1B,
+  SYS_PIPE          = 0x1C,
 };
 
 #endif // ARACHNYAA_KERNEL_SYSCALL_H_

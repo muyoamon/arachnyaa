@@ -4,6 +4,7 @@
 #include "kernel/error.h"
 #include "kernel/ipc.h"
 #include "kernel/kobj.h"
+#include "kernel/pipe.h"
 #include "kernel/protocol.h"
 #include "lib/string.h"
 #include "process/process.h"
@@ -34,6 +35,9 @@ int sys_write(cap_handle_t handle, const void *user_buf, size_t len) {
 
   if (!obj)
     return -KERR_INVAL;
+
+  if (obj->type == KOBJ_PIPE)
+    return pipe_write((pipe_buf_t *)obj->payload, user_buf, (uint32_t)len);
 
   if (obj->type != KOBJ_REMOTE)
     return -KERR_UNSUPPORTED;

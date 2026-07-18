@@ -2,6 +2,7 @@ set(KERNEL_SYS_SOURCES
   namespace.c
   write.c
   ipc.c
+  pipe.c
   proc.c
   read.c
   ep.c

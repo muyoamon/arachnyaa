@@ -36,6 +36,7 @@ typedef enum {
   KOBJ_DEVICE,
   KOBJ_IOSTREAM,
   KOBJ_IRQ,
+  KOBJ_PIPE,
 } kobj_type_t;
 
 /*

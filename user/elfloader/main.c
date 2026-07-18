@@ -301,6 +301,9 @@ done:
   if (elf_cap)       sys_cap_close(elf_cap);
   if (self_vspace)   sys_cap_close(self_vspace);
   if (target_vspace) sys_cap_close(target_vspace);
+  if (stdin_cap)     sys_cap_close(stdin_cap);
+  if (stdout_cap)    sys_cap_close(stdout_cap);
+  if (stderr_cap)    sys_cap_close(stderr_cap);
 
   sys_ipc_msg_t reply;
   memset(&reply, 0, sizeof(reply));
@@ -574,6 +577,9 @@ done:
   if (file_h) sys_close(file_h);
   if (self_vspace)   sys_cap_close(self_vspace);
   if (target_vspace) sys_cap_close(target_vspace);
+  if (stdin_cap)     sys_cap_close(stdin_cap);
+  if (stdout_cap)    sys_cap_close(stdout_cap);
+  if (stderr_cap)    sys_cap_close(stderr_cap);
 
   sys_ipc_msg_t reply;
   memset(&reply, 0, sizeof(reply));

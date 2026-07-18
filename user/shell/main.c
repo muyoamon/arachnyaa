@@ -15,9 +15,10 @@
 #include "../ulib/string.h"
 #include "../procd/proc_args.h"
 
-#define LINE_MAX   240
-#define MAX_TOKENS  16
-#define MAX_VARS    16
+#define LINE_MAX    240
+#define MAX_TOKENS   32
+#define MAX_VARS     16
+#define MAX_SEGMENTS  8
 
 /* ---- variable store ---- */
 
@@ -140,52 +141,120 @@ void _start(void) {
       continue;
     }
 
-    /* Resolve command to an exec handle via the kernel namespace. */
-    cap_handle_t exec_h = (cap_handle_t)sys_open(tokens[0], 0);
+    /* ---- pipeline detection ---- */
 
-    if (exec_h == 0) {
-      tty_puts("not found: ");
-      tty_puts(tokens[0]);
-      tty_puts("\n");
-      continue;
-    }
-
-    /* Send IPC_OP_EXEC; pass tty as stdin/stdout/stderr */
-    sys_ipc_msg_t exec_req, exec_rep;
-    memset(&exec_req, 0, sizeof(exec_req));
-    memset(&exec_rep, 0, sizeof(exec_rep));
-    exec_req.opcode      = IPC_OP_EXEC;
-    exec_req.num_handles = 3;
-    exec_req.handles[0]  = g_tty;
-    exec_req.handles[1]  = g_tty;
-    exec_req.handles[2]  = g_tty;
-
-    /* Pack argv into proc_exec_args_t format. */
-    {
-      proc_exec_args_t *pea = (proc_exec_args_t *)exec_req.data;
-      uint8_t *blob = pea->blobs;
-      uint32_t blob_used = 0;
-      for (int i = 0; i < tc; i++) {
-        size_t tlen = strlen(tokens[i]) + 1u;
-        if (blob_used + tlen > PROC_EXEC_ARGS_BLOB_MAX) break;
-        memcpy(blob + blob_used, tokens[i], tlen);
-        blob_used += (uint32_t)tlen;
+    /* Segment boundaries: seg_start[i] = index of first token in segment i. */
+    int seg_start[MAX_SEGMENTS + 1];
+    int nseg = 0;
+    seg_start[0] = 0;
+    for (int i = 0; i < tc; i++) {
+      if (tokens[i][0] == '|' && tokens[i][1] == '\0') {
+        if (nseg + 1 >= MAX_SEGMENTS) break;
+        tokens[i] = NULL; /* mark as separator */
+        seg_start[++nseg] = i + 1;
       }
-      pea->argv_bytes = blob_used;
-      pea->envp_bytes = 0;
-      exec_req.num_bytes = PROC_EXEC_ARGS_HDR_SIZE + blob_used;
+    }
+    nseg++; /* total segment count */
+    seg_start[nseg] = tc;
+
+    /* Create pipes between adjacent segments. */
+    cap_handle_t pipe_r[MAX_SEGMENTS - 1];
+    cap_handle_t pipe_w[MAX_SEGMENTS - 1];
+    int npipes = nseg - 1;
+    int pipe_ok = 1;
+    for (int i = 0; i < npipes; i++) {
+      if (sys_pipe(&pipe_r[i], &pipe_w[i]) != 0) {
+        pipe_ok = 0;
+        npipes = i;
+        break;
+      }
     }
 
-    int rc = sys_call(exec_h, &exec_req, &exec_rep);
-    sys_cap_close(exec_h);
-
-    if (rc != 0 || exec_rep.handles[0] == 0) {
-      tty_puts("exec failed\n");
+    if (!pipe_ok) {
+      for (int i = 0; i < npipes; i++) {
+        sys_cap_close(pipe_r[i]);
+        sys_cap_close(pipe_w[i]);
+      }
+      tty_puts("pipe failed\n");
       continue;
     }
 
-    cap_handle_t watch_cap = exec_rep.handles[0];
-    sys_proc_wait(watch_cap);
-    sys_cap_close(watch_cap);
+    /* Execute each segment. */
+    cap_handle_t watch_caps[MAX_SEGMENTS];
+    int nwatch = 0;
+
+    for (int s = 0; s < nseg; s++) {
+      int start = seg_start[s];
+      int end   = seg_start[s + 1];
+      /* Find last non-NULL token for arg count. */
+      int slen = 0;
+      for (int i = start; i < end; i++) {
+        if (tokens[i]) slen++;
+      }
+      if (slen == 0) continue;
+
+      /* Determine stdio caps for this segment. */
+      cap_handle_t seg_stdin  = (s == 0)        ? g_tty : pipe_r[s - 1];
+      cap_handle_t seg_stdout = (s == nseg - 1) ? g_tty : pipe_w[s];
+
+      cap_handle_t exec_h = sys_open(tokens[start], 0);
+      if (exec_h == 0) {
+        tty_puts("not found: ");
+        tty_puts(tokens[start]);
+        tty_puts("\n");
+        continue;
+      }
+
+      sys_ipc_msg_t exec_req, exec_rep;
+      memset(&exec_req, 0, sizeof(exec_req));
+      memset(&exec_rep, 0, sizeof(exec_rep));
+      exec_req.opcode      = IPC_OP_EXEC;
+      exec_req.num_handles = 3;
+      exec_req.handles[0]  = seg_stdin;
+      exec_req.handles[1]  = seg_stdout;
+      exec_req.handles[2]  = g_tty;
+
+      {
+        proc_exec_args_t *pea = (proc_exec_args_t *)exec_req.data;
+        uint8_t *blob = pea->blobs;
+        uint32_t blob_used = 0;
+        for (int i = start; i < end; i++) {
+          if (!tokens[i]) continue;
+          size_t tlen = strlen(tokens[i]) + 1u;
+          if (blob_used + tlen > PROC_EXEC_ARGS_BLOB_MAX) break;
+          memcpy(blob + blob_used, tokens[i], tlen);
+          blob_used += (uint32_t)tlen;
+        }
+        pea->argv_bytes = blob_used;
+        pea->envp_bytes = 0;
+        exec_req.num_bytes = PROC_EXEC_ARGS_HDR_SIZE + blob_used;
+      }
+
+      int rc = sys_call(exec_h, &exec_req, &exec_rep);
+      sys_cap_close(exec_h);
+
+      if (rc == 0 && exec_rep.handles[0] != 0) {
+        if (nwatch < MAX_SEGMENTS)
+          watch_caps[nwatch++] = exec_rep.handles[0];
+        else
+          sys_cap_close(exec_rep.handles[0]);
+      } else {
+        tty_puts("exec failed: ");
+        tty_puts(tokens[start]);
+        tty_puts("\n");
+      }
+    }
+
+    /* Close shell's copies of all pipe ends so writers can signal EOF. */
+    for (int i = 0; i < npipes; i++) {
+      sys_cap_close(pipe_r[i]);
+      sys_cap_close(pipe_w[i]);
+    }
+
+    /* Wait for all pipeline stages. */
+    for (int i = 0; i < nwatch; i++) {
+      sys_proc_wait(watch_caps[i]);
+      sys_cap_close(watch_caps[i]);
+    }
   }
 }
