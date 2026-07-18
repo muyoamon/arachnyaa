@@ -14,6 +14,7 @@
 #include "../ulib/syscall.h"
 #include "../ulib/string.h"
 #include "../procd/proc_args.h"
+#include "../vfs/fs_proto.h"
 
 #define LINE_MAX    240
 #define MAX_TOKENS   32
@@ -197,11 +198,56 @@ void _start(void) {
       cap_handle_t seg_stdin  = (s == 0)        ? g_tty : pipe_r[s - 1];
       cap_handle_t seg_stdout = (s == nseg - 1) ? g_tty : pipe_w[s];
 
-      cap_handle_t exec_h = sys_open(tokens[start], 0);
+      /* Scan for < and > redirections; null out operator + filename tokens. */
+      cap_handle_t redir_in = 0, redir_out = 0;
+      for (int i = start; i < end; i++) {
+        if (!tokens[i]) continue;
+        int is_in = (tokens[i][0] == '<' && tokens[i][1] == '\0');
+        int is_out = (tokens[i][0] == '>' && tokens[i][1] == '\0');
+        if (!is_in && !is_out) continue;
+
+        /* Find the filename: next non-NULL token. */
+        int j = i + 1;
+        while (j < end && !tokens[j]) j++;
+        if (j >= end) { tty_puts("syntax error\n"); break; }
+
+        uint32_t flags = is_in ? FS_O_RDONLY
+                                : (FS_O_WRONLY | FS_O_CREAT | FS_O_TRUNC);
+        cap_handle_t fh = sys_open(tokens[j], flags);
+        if (fh == 0) {
+          tty_puts("cannot open: ");
+          tty_puts(tokens[j]);
+          tty_puts("\n");
+        } else if (is_in) {
+          if (redir_in) sys_cap_close(redir_in);
+          redir_in = fh;
+          seg_stdin = fh;
+        } else {
+          if (redir_out) sys_cap_close(redir_out);
+          redir_out = fh;
+          seg_stdout = fh;
+        }
+        tokens[i] = NULL;
+        tokens[j] = NULL;
+        i = j;
+      }
+
+      /* Find command: first non-NULL token in segment after redirect scan. */
+      int cmd_idx = start;
+      while (cmd_idx < end && !tokens[cmd_idx]) cmd_idx++;
+      if (cmd_idx >= end) {
+        if (redir_in)  sys_cap_close(redir_in);
+        if (redir_out) sys_cap_close(redir_out);
+        continue;
+      }
+
+      cap_handle_t exec_h = sys_open(tokens[cmd_idx], FS_O_EXEC);
       if (exec_h == 0) {
         tty_puts("not found: ");
-        tty_puts(tokens[start]);
+        tty_puts(tokens[cmd_idx]);
         tty_puts("\n");
+        if (redir_in)  sys_cap_close(redir_in);
+        if (redir_out) sys_cap_close(redir_out);
         continue;
       }
 
@@ -232,6 +278,8 @@ void _start(void) {
 
       int rc = sys_call(exec_h, &exec_req, &exec_rep);
       sys_cap_close(exec_h);
+      if (redir_in)  sys_cap_close(redir_in);
+      if (redir_out) sys_cap_close(redir_out);
 
       if (rc == 0 && exec_rep.handles[0] != 0) {
         if (nwatch < MAX_SEGMENTS)

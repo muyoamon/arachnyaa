@@ -166,8 +166,8 @@ static void handle_open(const sys_ipc_msg_t *req) {
     size_t copy_len = path_len < (sizeof(abs_path) - 1u) ? path_len : (sizeof(abs_path) - 1u);
     memcpy(abs_path, path, copy_len);
     abs_path[copy_len] = '\0';
-  } else {
-    /* Bare name → try exec search path directories. */
+  } else if (req->flags & FS_O_EXEC) {
+    /* Bare name with FS_O_EXEC → search exec path directories. */
     cap_handle_t found_bh = 0;
     for (uint32_t i = 0; g_exec_paths[i] != NULL; i++) {
       snprintf(abs_path, sizeof(abs_path), "%s/", g_exec_paths[i]);
@@ -196,6 +196,12 @@ static void handle_open(const sys_ipc_msg_t *req) {
     memcpy(reply.data, &oreply, sizeof(oreply));
     sys_reply(&reply);
     return;
+  } else {
+    /* Bare name without FS_O_EXEC → resolve relative to "/". */
+    abs_path[0] = '/';
+    size_t name_len = path_len < (sizeof(abs_path) - 2u) ? path_len : (sizeof(abs_path) - 2u);
+    memcpy(abs_path + 1, path, name_len);
+    abs_path[1 + name_len] = '\0';
   }
 
   /* Absolute path: open via mount table. */

@@ -38,6 +38,7 @@ enum {
   FS_O_CREAT     = 0x04, /* create if not exists */
   FS_O_TRUNC     = 0x08, /* truncate to zero on open */
   FS_O_DIRECTORY = 0x10, /* must be a directory */
+  FS_O_EXEC      = 0x20, /* search exec path for bare names */
 };
 
 /* ---- Node types ---- */
