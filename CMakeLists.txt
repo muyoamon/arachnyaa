@@ -22,6 +22,11 @@ if(TARGET arachnyaa_kernel)
     set(INIT_BINARY ${CMAKE_BINARY_DIR}/user/init)
     set(ISO_DIR ${CMAKE_BINARY_DIR}/iso)
     set(ISO_FILE ${CMAKE_BINARY_DIR}/arachnyaa.iso)
+    set(DISK_IMG ${CMAKE_BINARY_DIR}/disk.img)
+
+    # Host FAT tooling (mtools) for building the boot disk image.
+    find_program(MFORMAT_EXE mformat PATHS /sbin /usr/sbin)
+    find_program(MCOPY_EXE   mcopy   PATHS /sbin /usr/sbin)
 
     # Prepare ISO structure
     add_custom_command(
@@ -92,6 +97,60 @@ if(TARGET arachnyaa_kernel)
     )
 
     add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/ramdiskd
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_ramdiskd>
+          ${ISO_DIR}/boot/ramdiskd
+        DEPENDS arachnyaa_ramdiskd
+        COMMENT "Copy arachnyaa_ramdiskd to ${ISO_DIR}/boot/ramdiskd"
+    )
+
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/atad
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_atad>
+          ${ISO_DIR}/boot/atad
+        DEPENDS arachnyaa_atad
+        COMMENT "Copy arachnyaa_atad to ${ISO_DIR}/boot/atad"
+    )
+
+    add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/fatfs
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:arachnyaa_fatfs>
+          ${ISO_DIR}/boot/fatfs
+        DEPENDS arachnyaa_fatfs
+        COMMENT "Copy arachnyaa_fatfs to ${ISO_DIR}/boot/fatfs"
+    )
+
+    # Build the FAT16 disk image (superfloppy, no MBR) from diskroot/.  Attached
+    # to QEMU as the primary IDE drive and driven by atad.  mformat -c 1 ...
+    # yields ~8192 sectors (4 MB), landing in the FAT16 cluster-count range.
+    # Created once; NOT rebuilt on normal runs, so guest writes persist across
+    # reboots.  Run the `mkdisk` target to reset it to pristine contents.
+    add_custom_command(
+        OUTPUT ${DISK_IMG}
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${DISK_IMG}
+        COMMAND dd if=/dev/zero of=${DISK_IMG} bs=1M count=4 status=none
+        COMMAND ${MFORMAT_EXE} -i ${DISK_IMG} -c 1 -h 0 -s 32 -H 0 -t 256 ::
+        COMMAND ${MCOPY_EXE} -i ${DISK_IMG} ${CMAKE_SOURCE_DIR}/diskroot/hello.txt ::/HELLO.TXT
+        COMMAND ${MCOPY_EXE} -i ${DISK_IMG} ${CMAKE_SOURCE_DIR}/diskroot/motd.txt  ::/MOTD.TXT
+        COMMENT "Building FAT16 disk image ${DISK_IMG}"
+        VERBATIM
+    )
+
+    # Explicitly reset the disk image to pristine contents (wipes guest writes).
+    add_custom_target(mkdisk
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${DISK_IMG}
+        COMMAND dd if=/dev/zero of=${DISK_IMG} bs=1M count=4 status=none
+        COMMAND ${MFORMAT_EXE} -i ${DISK_IMG} -c 1 -h 0 -s 32 -H 0 -t 256 ::
+        COMMAND ${MCOPY_EXE} -i ${DISK_IMG} ${CMAKE_SOURCE_DIR}/diskroot/hello.txt ::/HELLO.TXT
+        COMMAND ${MCOPY_EXE} -i ${DISK_IMG} ${CMAKE_SOURCE_DIR}/diskroot/motd.txt  ::/MOTD.TXT
+        COMMENT "Resetting FAT16 disk image ${DISK_IMG}"
+        VERBATIM
+    )
+
+    add_custom_command(
         OUTPUT ${ISO_DIR}/boot/vfs
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
           $<TARGET_FILE:arachnyaa_vfs>
@@ -139,22 +198,29 @@ if(TARGET arachnyaa_kernel)
     # Build ISO using grub-mkrescue
     add_custom_target(iso
         COMMAND grub-mkrescue -o ${ISO_FILE} ${ISO_DIR}
-        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/ramfs ${ISO_DIR}/boot/vfs ${ISO_DIR}/boot/shell ${ISO_DIR}/boot/echo ${ISO_DIR}/boot/cat ${ISO_DIR}/boot/ls
+        DEPENDS ${ISO_DIR}/boot/grub/grub.cfg ${ISO_DIR}/boot/initd ${ISO_DIR}/boot/log-client ${ISO_DIR}/boot/ttyd ${ISO_DIR}/boot/procd ${ISO_DIR}/boot/elfloader ${ISO_DIR}/boot/ramfs ${ISO_DIR}/boot/ramdiskd ${ISO_DIR}/boot/atad ${ISO_DIR}/boot/fatfs ${ISO_DIR}/boot/vfs ${ISO_DIR}/boot/shell ${ISO_DIR}/boot/echo ${ISO_DIR}/boot/cat ${ISO_DIR}/boot/ls
         COMMENT "Building bootable ISO image..."
         VERBATIM
     )
 
-    # Run QEMU
+    # Run QEMU.  disk.img is the primary IDE master (index 0); the boot ISO is
+    # -cdrom (secondary master, index 2), so they do not conflict.
     add_custom_target(run-qemu
-        COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -serial stdio
-        DEPENDS iso
+        COMMAND qemu-system-i386 -cdrom ${ISO_FILE}
+                -drive file=${DISK_IMG},format=raw,if=ide,index=0
+                -boot d
+                -serial stdio
+        DEPENDS iso ${DISK_IMG}
         COMMENT "Running QEMU..."
         VERBATIM
     )
 
     add_custom_target(debug-qemu-iso
-        COMMAND qemu-system-i386 -cdrom ${ISO_FILE} -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
-        DEPENDS iso
+        COMMAND qemu-system-i386 -cdrom ${ISO_FILE}
+                -drive file=${DISK_IMG},format=raw,if=ide,index=0
+                -boot d
+                -d int -s -S -monitor stdio# -s: GDB stub, -S: Stop at startup
+        DEPENDS iso ${DISK_IMG}
         COMMENT "Running QEMU in debug mode (localhost:1234)..."
         VERBATIM
     )

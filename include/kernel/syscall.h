@@ -35,6 +35,8 @@ enum {
   SYS_REPLY_TO      = 0x1A,
   SYS_BOOTSTRAP_CAP = 0x1B,
   SYS_PIPE          = 0x1C,
+  SYS_IO_INSW       = 0x1D,
+  SYS_IO_OUTSW      = 0x1E,
 };
 
 #endif // ARACHNYAA_KERNEL_SYSCALL_H_

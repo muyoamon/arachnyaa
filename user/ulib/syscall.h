@@ -38,6 +38,8 @@ enum {
   SYS_REPLY_TO      = 0x1A,
   SYS_BOOTSTRAP_CAP = 0x1B,
   SYS_PIPE          = 0x1C,
+  SYS_IO_INSW       = 0x1D,
+  SYS_IO_OUTSW      = 0x1E,
 };
 
 /* ---- protocol operation rights ---- */
@@ -276,6 +278,15 @@ static inline uint32_t sys_io_in(uint32_t port) {
 
 static inline void sys_io_out(uint32_t port, uint32_t val) {
   _sc2(SYS_IO_OUT, port, val);
+}
+
+/* Bulk 16-bit port IO: transfer `count` words between `port` and `buf`. */
+static inline int sys_io_insw(uint32_t port, void *buf, uint32_t count) {
+  return (int)_sc3(SYS_IO_INSW, port, (uint32_t)(uintptr_t)buf, count);
+}
+
+static inline int sys_io_outsw(uint32_t port, const void *buf, uint32_t count) {
+  return (int)_sc3(SYS_IO_OUTSW, port, (uint32_t)(uintptr_t)buf, count);
 }
 
 static inline cap_handle_t sys_vspace_create(void) {

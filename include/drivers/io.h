@@ -15,6 +15,18 @@ static inline uint8_t inb(uint16_t port) {
     return ret;
 }
 
+// Read `count` 16-bit words from an I/O port into buf (REP INSW).
+static inline void insw(uint16_t port, void *buf, uint32_t count) {
+    asm volatile ("cld; rep insw"
+                  : "+D"(buf), "+c"(count) : "d"(port) : "memory");
+}
+
+// Write `count` 16-bit words from buf to an I/O port (REP OUTSW).
+static inline void outsw(uint16_t port, const void *buf, uint32_t count) {
+    asm volatile ("cld; rep outsw"
+                  : "+S"(buf), "+c"(count) : "d"(port) : "memory");
+}
+
 // create small I/O delay
 void io_wait(void);
 

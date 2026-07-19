@@ -15,28 +15,30 @@
 
 static int parse_resource_name(const char *name, char *protocol,
                                const char **path_out) {
-  size_t idx = 0;
   if (!name || !protocol || !path_out) {
     return KERR_INVAL;
   }
 
-  while (name[idx] != '\0' && name[idx] != ':') {
-    if (idx + 1 >= PROCESS_PROTOCOL_NAME_MAX) {
-      return KERR_NOSPACE;
-    }
-    protocol[idx] = name[idx];
-    idx++;
+  /* Locate the protocol separator without copying — the length limit applies
+   * only to the protocol part, not the whole (colon-less) path. */
+  size_t colon = 0;
+  while (name[colon] != '\0' && name[colon] != ':') {
+    colon++;
   }
 
-  if (name[idx] != ':') {
+  if (name[colon] != ':') {
     /* No colon: empty protocol, whole string is the path. */
     protocol[0] = '\0';
     *path_out = name;
     return 0;
   }
 
-  protocol[idx] = '\0';
-  *path_out = &name[idx + 1];
+  if (colon + 1 > PROCESS_PROTOCOL_NAME_MAX) {
+    return KERR_NOSPACE;
+  }
+  memcpy(protocol, name, colon);
+  protocol[colon] = '\0';
+  *path_out = &name[colon + 1];
   return 0;
 }
 

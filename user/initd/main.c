@@ -414,12 +414,16 @@ void _start(void) {
   cap_handle_t proc_ep  = sys_ep_create();
   cap_handle_t elf_ep   = sys_ep_create();
   cap_handle_t ramfs_ep = sys_ep_create();
+  cap_handle_t blk_ep   = sys_ep_create();
+  cap_handle_t fatfs_ep = sys_ep_create();
   cap_handle_t vfs_ep   = sys_ep_create();
 
   sys_ns_bind("tty",       tty_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
   sys_ns_bind("proc",      proc_ep,  KOP_OPEN | KOP_CALL | KOP_CLOSE);
   sys_ns_bind("elfloader", elf_ep,   KOP_OPEN | KOP_CALL | KOP_EXEC | KOP_CLOSE);
   sys_ns_bind("ramfs",     ramfs_ep, KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
+  sys_ns_bind("blk",       blk_ep,   KOP_OPEN | KOP_CALL | KOP_CLOSE);
+  sys_ns_bind("fatfs",     fatfs_ep, KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE);
   sys_ns_bind("vfs",       vfs_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE | KOP_EXEC);
   sys_ns_bind("",          vfs_ep,   KOP_OPEN | KOP_CALL | KOP_READ | KOP_WRITE | KOP_CLOSE | KOP_EXEC);
   bind_log_protocol();
@@ -464,6 +468,16 @@ void _start(void) {
     ramfs_arg.argv0       = "ramfs";
     ramfs_arg.endpoint    = ramfs_ep;
     sys_spawn(&ramfs_arg, NULL, NULL);
+  }
+
+  {
+    sys_proc_arg_t blk_arg;
+    memset(&blk_arg, 0, sizeof(blk_arg));
+    blk_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    blk_arg.module_name = "atad";     /* ATA PIO driver on the primary IDE disk */
+    blk_arg.argv0       = "atad";
+    blk_arg.endpoint    = blk_ep;
+    sys_spawn(&blk_arg, NULL, NULL);
   }
 
   {
@@ -546,6 +560,11 @@ void _start(void) {
       size_t prefix_len = sizeof(bin_prefix) - 1u;
       size_t name_len   = strlen(bm_modules[mi].name);
       if (prefix_len + name_len + 1u > sizeof(path)) continue;
+
+      /* The "disk" module is a raw FAT16 image, not a program — it is consumed
+       * by the ramdisk seeding below, not exec'd.  Seeding a multi-MB blob into
+       * ramfs would exhaust its bump allocator and starve later modules. */
+      if (name_len == 4 && memcmp(bm_modules[mi].name, "disk", 4) == 0) continue;
       memcpy(path, bin_prefix, prefix_len);
       memcpy(path + prefix_len, bm_modules[mi].name, name_len);
       path[prefix_len + name_len] = '\0';
@@ -573,6 +592,17 @@ void _start(void) {
         continue;
       }
 
+      /* Pre-size the file to its full length so ramfs allocates its data buffer
+       * exactly once.  Without this, each 256-byte write grows (and leaks) the
+       * whole buffer — O(size^2) bump usage that starves later modules. */
+      {
+        sys_ipc_msg_t treq, trep;
+        memset(&treq, 0, sizeof(treq)); memset(&trep, 0, sizeof(trep));
+        treq.opcode = FS_OP_TRUNCATE; treq.num_bytes = sizeof(size);
+        memcpy(treq.data, &size, sizeof(size));
+        sys_call(fh, &treq, &trep);
+      }
+
       const uint8_t *src = (const uint8_t *)MOD_SEED_VADDR;
       uint32_t done = 0;
       while (done < size) {
@@ -588,6 +618,17 @@ void _start(void) {
     }
   }
 
+  /* Spawn fatfs; it mounts the real disk via blk: (atad). */
+  {
+    sys_proc_arg_t fatfs_arg;
+    memset(&fatfs_arg, 0, sizeof(fatfs_arg));
+    fatfs_arg.flags       = SYS_PROG_F_BOOTMODULE;
+    fatfs_arg.module_name = "fatfs";
+    fatfs_arg.argv0       = "fatfs";
+    fatfs_arg.endpoint    = fatfs_ep;
+    sys_spawn(&fatfs_arg, NULL, NULL);
+  }
+
   /* Mount ramfs at "/" in VFS */
   tty_dbglog(g_tty, "mounting ramfs at /\n");
   {
@@ -601,6 +642,46 @@ void _start(void) {
       memset(&mr, 0, sizeof(mr));
       static const char mnt_path[]  = "/";
       static const char mnt_proto[] = "ramfs";
+      memcpy(mr.mount_path,    mnt_path,  sizeof(mnt_path)  - 1u);
+      memcpy(mr.backend_proto, mnt_proto, sizeof(mnt_proto) - 1u);
+      mount_req.num_bytes = sizeof(mr);
+      memcpy(mount_req.data, &mr, sizeof(mr));
+      sys_call(vfs_ctrl, &mount_req, &mount_rep);
+      sys_close(vfs_ctrl);
+    }
+  }
+
+  /* Create the "disk" mount-point directory in ramfs so it appears in `ls /`.
+   * (Like Unix, a mount point must exist as a real directory in the parent FS;
+   * VFS's longest-prefix match still routes paths under /disk to fatfs.) */
+  {
+    cap_handle_t root_h = sys_open("ramfs:/", FS_O_DIRECTORY);
+    if (root_h != 0) {
+      sys_ipc_msg_t mkdir_req, mkdir_rep;
+      memset(&mkdir_req, 0, sizeof(mkdir_req));
+      memset(&mkdir_rep, 0, sizeof(mkdir_rep));
+      mkdir_req.opcode    = FS_OP_MKDIR;
+      static const char disk_name[] = "disk";
+      mkdir_req.num_bytes = (uint32_t)(sizeof(disk_name) - 1u);
+      memcpy(mkdir_req.data, disk_name, sizeof(disk_name) - 1u);
+      sys_call(root_h, &mkdir_req, &mkdir_rep);
+      sys_close(root_h);
+    }
+  }
+
+  /* Mount fatfs at "/disk" in VFS */
+  tty_dbglog(g_tty, "mounting fatfs at /disk\n");
+  {
+    cap_handle_t vfs_ctrl = sys_open("vfs:", 0);
+    if (vfs_ctrl != 0) {
+      sys_ipc_msg_t mount_req, mount_rep;
+      memset(&mount_req, 0, sizeof(mount_req));
+      memset(&mount_rep, 0, sizeof(mount_rep));
+      mount_req.opcode = FS_OP_MOUNT;
+      fs_mount_req_t mr;
+      memset(&mr, 0, sizeof(mr));
+      static const char mnt_path[]  = "/disk";
+      static const char mnt_proto[] = "fatfs";
       memcpy(mr.mount_path,    mnt_path,  sizeof(mnt_path)  - 1u);
       memcpy(mr.backend_proto, mnt_proto, sizeof(mnt_proto) - 1u);
       mount_req.num_bytes = sizeof(mr);

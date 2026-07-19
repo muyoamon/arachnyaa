@@ -92,6 +92,10 @@ uint64_t syscall_dispatcher(uint32_t syscode, native_word a0, native_word a1,
     return sys_bootstrap_cap((uint32_t)a0);
   case SYS_PIPE:
     return sys_pipe((sys_pipe_result_t *)a0);
+  case SYS_IO_INSW:
+    return sys_io_insw((uint32_t)a0, (void *)a1, (uint32_t)a2);
+  case SYS_IO_OUTSW:
+    return sys_io_outsw((uint32_t)a0, (const void *)a1, (uint32_t)a2);
 
   default:
     return -1;
